@@ -44,7 +44,7 @@ The **Audio file or folder path** box accepts either a **single file** or a **fo
 
 - **In order / Shuffle** — the icon button next to the path box toggles between the two. Shuffle reorders the whole folder each time you get through it, so a pass never repeats a track and never skips one.
 - **Loop this track** — locks playback to one file. The lock lives on the server, so the file plays once per alert and stays put across restarts. While it is on, the order/shuffle button is disabled, and **Preview** plays the pinned track too.
-- **Normalise volume** — on by default. Every track's peak is matched to one shared reference, measured from the first track you played and clamped to 0.25–0.89, so a quiet folder and a loud folder play at the same level. Gain is capped at 40× and near-silent files are left alone. Turning it on re-measures from whatever plays next.
+- **Normalise volume** — on by default, and it works in **both directions**: quiet tracks are lifted and loud ones are brought down, so a quiet folder and a loud folder play at the same level. One track is measured and becomes the target level for the whole playlist. That track is whichever one is playing the first time normalisation reaches your audio — on a fresh install, the first track you play; if you tick the box yourself, the one you are listening to at that moment, so un-ticking and re-ticking re-picks it. The measured level is clamped to 0.25–0.89, kept in browser storage, and reused across restarts and across folders. Gain is capped at 40×, and a near-silent file is never chosen as the reference.
 - **Preview** — plays the next file in the running order rather than the one that is armed, so you can walk the whole folder. It does not change what the next real alert will play.
 - **Restore default** — clears the path and falls back to the built-in chime.
 
@@ -62,8 +62,8 @@ Verified during development, in the client's own embedded browser at a 463 px vi
 
 ## Data & access
 
-- **Files read** — the audio file or folder you type into the sound box, read-only. The runtime also reads `sounds/` inside the installed plugin directory for the bundled samples. Nothing else on disk is touched; there is no scanning of your music library.
-- **Files written** — one `state.json` in the Host-provided `context.dataDir`, holding the duration, phase, remaining time, completed-segment count, accumulated focus seconds, and your sound settings. It is written atomically (temp file in the same directory, then rename) and the directory layout is treated as opaque.
+- **Files read** — the audio file or folder you type into the sound box, read-only. The runtime also reads `sounds/` inside the installed plugin directory for the bundled samples. Nothing else on disk is touched; there is no scanning of your music library. A relative path is locked inside the plugin directory, but **an absolute path may point anywhere on your machine** — see the Alert sound section above for that boundary.
+- **Files written** — exactly one: a `state.json` under the directory the Host passes as `context.dataDir`, holding the duration, phase, remaining time, completed-segment count, accumulated focus seconds, and your sound settings. The path comes from `context.dataDir` alone — nothing is hardcoded or walked up from — and nothing outside that directory is written. Each save writes a `state.json.tmp` beside it and then renames over `state.json`, so a reader always sees a complete file rather than a half-written one, and saves are chained so two of them cannot interleave.
 - **Browser storage** — view preferences only: interface language, colour mode, whether volume normalisation is on, and the measured reference level. No timer or session data.
 - **Network** — none. The runtime makes no outbound requests and has no telemetry.
 - **Subprocesses** — none.
