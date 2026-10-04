@@ -6,6 +6,12 @@ A Pomodoro timer that only counts. When a work segment ends it shows an in-page 
 
 Author: [1602WinXP](https://github.com/1602WinXP) · Version: `1.0.0`
 
+![Pomodoro Sit Reminder with a work segment in progress](docs/preview.png)
+
+![Reminder sound, colour mode, and statistics](docs/preview-settings.png)
+
+*Both captured in MiniMax Code on Windows at a 463 px panel width, with the session statistics cleared to zero so no personal data is shown. The reminder sound is the bundled `sounds/` folder, playing in sequence with loudness matching on; the app is in dark mode.*
+
 ## What it does
 
 - **Work segment** — 1–180 minutes, with 15 / 25 / 45 / 60 presets.
