@@ -935,7 +935,7 @@
 
       <p class="conn" id="conn">
         <span class="dot" aria-hidden="true"></span>
-        <span id="connText">已连接</span>
+        <span id="connText" data-i18n="conn.online"></span>
       </p>
     </main>
 
@@ -1087,7 +1087,7 @@
             'sound.normalize': 'Normalise volume',
             'sound.previewing': 'Previewing: ',
             'sound.pinned': 'Pinned: ',
-            'sound.mode.locked': 'Pinned to one track, so order/shuffle and 试听 all play it.',
+            'sound.mode.locked': 'Pinned to one track, so in order / shuffle and Preview all play it.',
             'err.sound.sound_path_escapes_plugin':
               'A relative path cannot leave the plugin folder — use something like sounds/.',
             'err.sound.sound_dir_empty': 'No usable audio files in that folder.',
@@ -1385,6 +1385,11 @@
           } catch (error) {
             /* preference simply will not survive a reload */
           }
+
+          // setConn() writes the connection label as raw text, so a language switch
+          // has to re-apply the remembered state. Without this, going offline and
+          // then changing language would report "Connected" while it is retrying.
+          if (connOnline === false) el.connText.textContent = t('conn.offline');
 
           render();
         }
@@ -2009,7 +2014,12 @@
 
         // ---------------------------------------------------------------- requests
 
+        // Last known connection state, so a language switch can re-localise the
+        // label instead of leaving behind whatever setConn() last wrote.
+        var connOnline = null;
+
         function setConn(online) {
+          connOnline = online;
           el.conn.classList.toggle('is-offline', !online);
           el.connText.textContent = online ? t('conn.online') : t('conn.offline');
         }

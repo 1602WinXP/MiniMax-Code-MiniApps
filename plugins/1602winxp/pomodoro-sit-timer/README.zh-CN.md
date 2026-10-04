@@ -6,9 +6,9 @@
 
 作者：[1602WinXP](https://github.com/1602WinXP) · 版本：`1.0.0`
 
-![番茄钟 · 久坐提醒，工作段进行中](docs/preview.png)
+![番茄钟 · 久坐提醒，工作段进行中](docs/preview.zh-CN.png)
 
-![提醒音、配色与统计设置](docs/preview-settings.png)
+![提醒音、配色与统计设置](docs/preview-settings.zh-CN.png)
 
 *两张均在 MiniMax Code（Windows）面板宽 463 px 下实机截取，会话统计已清零，不含个人数据。提醒音是内置的 `sounds/` 文件夹，顺序播放、音量标准化已开启，界面为夜间模式。*
 
