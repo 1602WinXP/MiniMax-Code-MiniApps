@@ -786,14 +786,16 @@ export async function start(context) {
       //
       // A pinned track still wins here: 单曲循环 outranks 试听.
       const preview = Number(url.searchParams.get('p'));
-      const track = await currentTrack(
-        Number.isInteger(preview) && preview > 0
-          ? state.reminderSeq + preview
-          : state.reminderSeq,
-      );
+      const offset = Number.isInteger(preview) && preview > 0 ? preview : 0;
+      const track = await currentTrack(state.reminderSeq + offset);
       if (!track) return sendJson(response, 410, { error: 'sound_file_gone' });
       const contentType = SOUND_TYPES.get(extname(track).toLowerCase());
       if (!contentType) return sendJson(response, 500, { error: 'sound_type_unsupported' });
+      // What the NEXT 试听 press will play, resolved by the same function that
+      // served this response, so the hint can never drift from the real order.
+      // `currentTrack` re-reads the folder, so this is one extra directory scan
+      // on a route the user only reaches by deliberately auditioning.
+      const next = await currentTrack(state.reminderSeq + offset + 1);
       let info;
       try {
         info = await stat(track);
@@ -808,6 +810,10 @@ export async function start(context) {
         // track than the armed one, so without this the label would keep showing
         // the armed track while a different file was playing.
         'x-sound-track': basename(track),
+        // Disclosure for the audition button: pressing 试听 again is a black box
+        // unless the page says what it will do. Absent when there is nothing to
+        // walk to, and the Client falls back to the armed track.
+        ...(next ? { 'x-sound-next-track': basename(next) } : {}),
         'cache-control': 'no-store',
       });
       const soundStream = createReadStream(track);

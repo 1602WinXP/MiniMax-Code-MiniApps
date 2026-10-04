@@ -473,6 +473,58 @@
         margin-top: 12px;
       }
 
+      /* 应用 sits on its own row so the audition row can say what 试听 will do
+         before you press it.
+
+         This row must NOT wrap. flex-shrink only applies after line breaking, so
+         a wrapping row pushes Restore default onto a third line instead of
+         shortening the hint. nowrap makes the hint the only thing that gives
+         way, and it ellipsises. */
+      .sound-actions {
+        flex-wrap: nowrap;
+      }
+
+      .sound-actions > .btn {
+        flex: 0 0 auto;
+      }
+
+      .sound-next {
+        flex: 0 1 auto;
+        min-width: 0;
+        align-self: center;
+        height: 40px;
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--mcode-text-muted);
+        overflow: hidden;
+      }
+
+      /* The author `display: flex` above beats the UA rule for [hidden]. */
+      .sound-next[hidden] {
+        display: none;
+      }
+
+      .sound-next .sound-next-label {
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+
+      .sound-next .sound-next-name {
+        flex: 0 1 auto;
+        min-width: 0;
+        color: var(--mcode-text);
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sound-actions-tail {
+        margin-top: 8px;
+      }
+
       /* Current track name: takes the slack on the path row, truncates. */
       .sound-now {
         flex: 1 1 40px;
@@ -881,9 +933,13 @@
             </div>
           </form>
           <div class="actions sound-actions">
+            <span class="sound-next" id="soundNextTrack" hidden
+              ><span class="sound-next-label" data-i18n="sound.next">下一首</span
+              ><span class="sound-next-name" id="soundNextName"></span
+            ></span>
             <button type="button" class="btn btn-secondary" id="testSoundBtn" data-i18n="btn.preview">试听</button>
-            <button type="button" class="btn btn-secondary" id="clearSoundBtn" data-i18n="btn.restoreDefault">恢复默认音</button>
-            <button type="submit" class="btn btn-secondary" form="soundForm" data-i18n="btn.apply">应用</button>
+          </div>
+          <div class="actions sound-actions sound-actions-tail">
             <span class="sound-toggles">
               <label class="pin">
                 <input type="checkbox" id="soundLoop" />
@@ -987,7 +1043,7 @@
             'preset.p60': '60 分钟',
             'card.sound': '提醒音',
             'card.sound.hint':
-              '填音频文件或文件夹路径即可替换默认提示音。相对路径以插件目录为基准（如 sounds/），绝对路径用本机任意位置；留空则用内置的合成音。',
+              '填音频文件或文件夹路径即可替换默认提示音。相对路径以插件目录为基准（如 sounds/），绝对路径用本机任意位置；留空则用内置的合成音。改完按回车生效；清空后按回车即恢复内置音。',
             'sound.current': '当前：',
             'sound.default': '默认提示音',
             'field.soundpath': '音频文件或文件夹路径',
@@ -996,6 +1052,7 @@
             'sound.mode.hint': '点一下切换播放方式（顺序 / 随机）。',
             'sound.loop': '单曲循环',
             'sound.normalize': '音量标准化',
+            'sound.next': '下一首',
             'sound.previewing': '试听中：',
             'sound.pinned': '单曲循环锁定：',
             'sound.mode.locked': '单曲循环已锁定这一首，顺序/随机和试听都只播它。',
@@ -1006,7 +1063,6 @@
             'err.sound.sound_dir_too_many': '音频文件太多了（上限 {n} 个）。',
             'err.sound.sound_dir_too_large': '这个文件夹里的音频太大了。',
             'btn.preview': '试听',
-            'btn.restoreDefault': '恢复默认音',
             'card.appearance': '外观',
             'card.appearance.hint': '默认跟随系统切换；选白天或夜间后固定，不再跟随。',
             'group.theme': '配色模式',
@@ -1076,7 +1132,7 @@
             'preset.p60': '60 min',
             'card.sound': 'Alert sound',
             'card.sound.hint':
-              'Put a path to an audio file or a folder to replace the default chime. Relative paths resolve against the plugin folder (e.g. sounds/); absolute paths can point anywhere on this machine. Leave it blank to keep the built-in sound.',
+              'Put a path to an audio file or a folder to replace the default chime. Relative paths resolve against the plugin folder (e.g. sounds/); absolute paths can point anywhere on this machine. Leave it blank to keep the built-in sound. Press Enter to apply; clearing the field and pressing Enter restores the built-in chime.',
             'sound.current': 'Current: ',
             'sound.default': 'Default chime',
             'field.soundpath': 'Audio file or folder path',
@@ -1085,8 +1141,9 @@
             'sound.mode.hint': 'Tap to switch playback order (in order / shuffle).',
             'sound.loop': 'Loop this track',
             'sound.normalize': 'Normalise volume',
-            'sound.previewing': 'Previewing: ',
-            'sound.pinned': 'Pinned: ',
+            'sound.next': 'Next',
+            'sound.previewing': 'Previewing:',
+            'sound.pinned': 'Pinned:',
             'sound.mode.locked': 'Pinned to one track, so in order / shuffle and Preview all play it.',
             'err.sound.sound_path_escapes_plugin':
               'A relative path cannot leave the plugin folder — use something like sounds/.',
@@ -1095,7 +1152,6 @@
             'err.sound.sound_dir_too_many': 'Too many audio files (limit {n}).',
             'err.sound.sound_dir_too_large': 'The audio in that folder is too large.',
             'btn.preview': 'Preview',
-            'btn.restoreDefault': 'Restore default',
             'card.appearance': 'Appearance',
             'card.appearance.hint':
               'Follows the system by default. Pick Day or Night to pin it.',
@@ -1169,7 +1225,7 @@
             'preset.p60': '60分',
             'card.sound': '通知音',
             'card.sound.hint':
-              '音声ファイルまたはフォルダのパスを入れると既定の音を置き換えられます。相対パスはプラグインのフォルダを基準に解決され（例: sounds/）、絶対パスならこのパソコン上の任意の場所を指定できます。空欄なら内蔵音を使います。',
+              '音声ファイルまたはフォルダのパスを入れると既定の音を置き換えられます。相対パスはプラグインのフォルダを基準に解決され（例: sounds/）、絶対パスならこのパソコン上の任意の場所を指定できます。空欄なら内蔵音を使います。変更は Enter キーで反映されます。空欄にして Enter で内蔵音に戻ります。',
             'sound.current': '現在：',
             'sound.default': '既定の通知音',
             'field.soundpath': '音声ファイルまたはフォルダのパス',
@@ -1178,6 +1234,7 @@
             'sound.mode.hint': 'タップして再生順を切り替えます（順番 / ランダム）。',
             'sound.loop': 'この曲を繰り返し',
             'sound.normalize': '音量を正規化',
+            'sound.next': '次の曲',
             'sound.previewing': '試聴中：',
             'sound.pinned': '固定中：',
             'sound.mode.locked': '1 曲に固定中なので、順番/ランダム・試聴ともその曲になります。',
@@ -1188,7 +1245,6 @@
             'err.sound.sound_dir_too_many': '音声ファイルが多すぎます（上限 {n} 個）。',
             'err.sound.sound_dir_too_large': 'このフォルダの音声が大きすぎます。',
             'btn.preview': '試聴',
-            'btn.restoreDefault': '既定に戻す',
             'card.appearance': '表示',
             'card.appearance.hint':
               '初期状態はシステムに追従します。「昼」「夜」を選ぶと固定されます。',
@@ -1262,7 +1318,7 @@
             'preset.p60': '60분',
             'card.sound': '알림음',
             'card.sound.hint':
-              '음성 파일 또는 폴더 경로를 넣으면 기본 알림음을 대체합니다. 상대 경로는 플러그인 폴더를 기준으로 계산되며(예: sounds/), 절대 경로는 이 컴퓨터의 어느 위치든 지정할 수 있습니다. 비워 두면 내장음을 사용합니다.',
+              '음성 파일 또는 폴더 경로를 넣으면 기본 알림음을 대체합니다. 상대 경로는 플러그인 폴더를 기준으로 계산되며(예: sounds/), 절대 경로는 이 컴퓨터의 어느 위치든 지정할 수 있습니다. 비워 두면 내장음을 사용합니다. 변경 사항은 Enter 키로 적용되며, 비운 뒤 Enter를 누르면 내장음으로 돌아갑니다.',
             'sound.current': '현재: ',
             'sound.default': '기본 알림음',
             'field.soundpath': '음성 파일 또는 폴더 경로',
@@ -1271,8 +1327,9 @@
             'sound.mode.hint': '탭하면 재생 순서를 바꿉니다(순서 / 랜덤).',
             'sound.loop': '이 곡 반복',
             'sound.normalize': '음량 정규화',
-            'sound.previewing': '미리듣기: ',
-            'sound.pinned': '고정됨: ',
+            'sound.next': '다음 곡',
+            'sound.previewing': '미리듣기:',
+            'sound.pinned': '고정됨:',
             'sound.mode.locked': '한 곡에 고정되어 순서/랜덤과 미리듣기 모두 그 곡만 재생합니다.',
             'err.sound.sound_path_escapes_plugin':
               '상대 경로로는 플러그인 폴더 밖을 벗어날 수 없습니다. sounds/처럼 입력하세요.',
@@ -1281,7 +1338,6 @@
             'err.sound.sound_dir_too_many': '음성 파일이 너무 많습니다(최대 {n}개).',
             'err.sound.sound_dir_too_large': '이 폴더의 음성 용량이 너무 큽니다.',
             'btn.preview': '들어보기',
-            'btn.restoreDefault': '기본값 복원',
             'card.appearance': '표시',
             'card.appearance.hint':
               '기본적으로 시스템 설정을 따릅니다. 「낮」「밤」을 선택하면 고정됩니다.',
@@ -1415,9 +1471,10 @@
           soundError: document.getElementById('soundError'),
           soundModeToggle: document.getElementById('soundModeToggle'),
           soundNowTrack: document.getElementById('soundNowTrack'),
+    soundNextTrack: document.getElementById('soundNextTrack'),
+    soundNextName: document.getElementById('soundNextName'),
           soundLoop: document.getElementById('soundLoop'),
           soundNormalize: document.getElementById('soundNormalize'),
-          clearSound: document.getElementById('clearSoundBtn'),
           testSound: document.getElementById('testSoundBtn'),
           resetStats: document.getElementById('resetStatsBtn'),
           resetConfirm: document.getElementById('resetConfirm'),
@@ -1503,6 +1560,12 @@
         // File name the last 试听 actually fetched, shown in place of the armed
         // track until the next real reminder loads. Null when not auditioning.
         var auditionName = null;
+        // File name the next 试听 press will fetch, reported by the same response
+        // that served the current one. The server resolves it with the same pure
+        // function it used to pick this track, so the hint cannot drift from the
+        // real order. Null until the first load, and whenever there is nothing to
+        // walk to.
+        var nextTrackName = null;
         // Optimistic value for the 单曲循环 checkbox while its request is in
         // flight, so a background frame cannot revert the tick under the cursor.
         // Null means "follow the server".
@@ -1762,6 +1825,14 @@
                   ? response.headers.get('x-sound-track')
                   : null;
               auditionName = preview ? served : null;
+              // The same response names the track the NEXT 试听 press will fetch.
+              // Read it whenever it is there; a missing header just means the
+              // hint stays empty, never that playback breaks.
+              nextTrackName =
+                response.headers && typeof response.headers.get === 'function'
+                  ? response.headers.get('x-sound-next-track')
+                  : null;
+              renderSoundNext();
               if (preview && auditionName) renderSoundLabel();
               return response.arrayBuffer();
             })
@@ -1824,6 +1895,29 @@
         function baseName(p) {
           var parts = String(p).split(/[\\/]/);
           return parts[parts.length - 1] || p;
+        }
+
+        /**
+         * Disclosure for the audition button: name the track the next 试听 press
+         * will play, so the button stops being a black box.
+         *
+         * Nothing to walk to means nothing to say — no folder, a single file
+         * (试听 replays the same one every time), or a lock (单曲循环 already means
+         * "this one, forever"). The hint then hides instead of showing a name
+         * that would be a lie.
+         */
+        function renderSoundNext() {
+          var node = el.soundNextTrack;
+          if (!node) return;
+          var walkable = Boolean(
+            snapshot.soundPath && snapshot.soundMode !== 'single' && !snapshot.soundPinned,
+          );
+          var name = walkable && nextTrackName ? baseName(nextTrackName) : '';
+          if (el.soundNextName) {
+            el.soundNextName.textContent = name;
+            el.soundNextName.title = name;
+          }
+          node.hidden = !name;
         }
 
         /**
@@ -1967,6 +2061,9 @@
           // While auditioning, show the file that actually played — otherwise the
           // label contradicts the audio after every 试听.
           renderSoundLabel();
+          // The hint hides itself once a lock or a single file removes anything to
+          // walk to, so it has to be re-evaluated whenever render() runs.
+          renderSoundNext();
           if (document.activeElement !== el.soundPathInput) {
             // Show what was configured. A relative path round-trips as `sounds`,
             // not as the runtime's temp directory, which changes every restart.
@@ -2197,11 +2294,10 @@
           void applySoundSetting(el.soundPathInput.value.trim());
         });
 
-        el.clearSound.addEventListener('click', function () {
-          if (busy) return;
-          el.soundPathInput.value = '';
-          void applySoundSetting(null);
-        });
+        // 恢复默认音 was removed as a button: clearing the field and pressing Enter
+        // posts an empty path, and the server treats "" and null the same way --
+        // both clear the configured sound and fall back to the built-in chime. The
+        // field hint says so, because the button was the discoverable part.
 
         // Named ti, not t: t() is the translation lookup and must not be shadowed.
         for (var ti = 0; ti < themeButtons.length; ti += 1) {
