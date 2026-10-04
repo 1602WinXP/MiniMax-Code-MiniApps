@@ -52,6 +52,72 @@ const MAX_TRACKS = 500;
 const MAX_PLAYLIST_BYTES = 200 * 1024 * 1024;
 
 /**
+ * Host/Origin loopback guards.
+ *
+ * A page on the open internet can reach a loopback server through DNS
+ * rebinding: it loads from `evil.com`, then a second DNS answer points
+ * `evil.com` at 127.0.0.1, and the browser still treats the request as
+ * same-origin — the origin compares the NAME that was typed, not the address
+ * it resolved to. A rebound request therefore arrives carrying a non-loopback
+ * `Host`, which is what these checks reject.
+ *
+ * Without them, a page like that could POST an arbitrary absolute path to
+ * /api/settings/sound and then read the bytes back from /api/sound.
+ */
+const LOOPBACK_NAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * The host part of an authority, without the port.
+ *
+ * `[::1]:49660` -> `[::1]`, `127.0.0.1:49660` -> `127.0.0.1`, `evil.com` ->
+ * `evil.com`. A bare unbracketed IPv6 literal has more than one colon, so the
+ * tail must not be mistaken for a port.
+ *
+ * @param {string | undefined | null} authority
+ * @returns {string | null} lowercased host, or null when unusable
+ */
+function authorityHost(authority) {
+  const value = String(authority ?? '').trim().toLowerCase();
+  if (value === '') return null;
+  if (value.startsWith('[')) {
+    const end = value.indexOf(']');
+    return end === -1 ? null : value.slice(0, end + 1);
+  }
+  const colon = value.lastIndexOf(':');
+  if (colon !== -1 && value.indexOf(':') === colon) return value.slice(0, colon);
+  return value;
+}
+
+/**
+ * @param {string | undefined | null} authority
+ * @param {string} boundHost the host this server was told to listen on
+ */
+function isLoopbackAuthority(authority, boundHost) {
+  const host = authorityHost(authority);
+  if (host === null) return false;
+  return LOOPBACK_NAMES.has(host) || host === String(boundHost ?? '').toLowerCase();
+}
+
+/**
+ * Same check for an `Origin`, which a browser sends on cross-origin requests and
+ * on same-origin POSTs. A missing Origin is not a failure — the Host check
+ * already covers that case.
+ *
+ * @param {string} origin
+ * @param {string} boundHost
+ */
+function isLoopbackOrigin(origin, boundHost) {
+  let parsed;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  return isLoopbackAuthority(parsed.host, boundHost);
+}
+
+/**
  * @param {MiniAppContext} context
  * @returns {Promise<MiniAppLifecycle>}
  */
@@ -654,6 +720,22 @@ export async function start(context) {
     const url = new URL(request.url ?? '/', 'http://miniapp.local');
     const { pathname } = url;
     const method = request.method ?? 'GET';
+
+    // DNS-rebinding guard, ahead of every route. See LOOPBACK_NAMES above: a
+    // rebound request carries the attacker's own name in Host, so refusing a
+    // non-loopback Host refuses the attack. Both rejections answer a bare 403
+    // and echo nothing the requester sent.
+    if (!isLoopbackAuthority(request.headers.host, context.listen.host)) {
+      response.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'forbidden' }));
+      return;
+    }
+    const origin = request.headers.origin;
+    if (origin !== undefined && !isLoopbackOrigin(origin, context.listen.host)) {
+      response.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'forbidden' }));
+      return;
+    }
 
     if (method === 'GET' && (pathname === '/dashboard' || pathname === '/')) {
       response.writeHead(200, {
