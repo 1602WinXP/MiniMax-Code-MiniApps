@@ -352,6 +352,14 @@
         border: 1px solid var(--mcode-border);
         border-radius: 12px;
         padding: 20px;
+        /* A grid item's automatic minimum size is its min-content width, and a
+           card holding a long file name has a very wide min-content. That let the
+           track grow past the panel, which pushed the track-name row out with it:
+           the row stopped being the width the cap and the ellipsis were computed
+           against, so the head was elided but the tail was still clipped by the
+           panel edge. Releasing the floor lets the track be the panel width, and
+           the row's own overflow and text-overflow then do their job. */
+        min-width: 0;
       }
 
       .card h2 {
@@ -402,17 +410,65 @@
         margin-left: 6px;
       }
 
-      /* Path input, mode toggle and the current track share one row. The label
-         gives up width so the toggle and track never get pushed off. */
+      /* Path input and mode toggle share one row. The label gives up width so
+         the toggle is never pushed off.
+
+         The row has to grow into the form's width. It is a flex item of .field,
+         and without flex-grow it is only as wide as its own content -- which used
+         to include the current track name. Once the track moved out onto its own
+         line, the row shrank to its minimum and the path box lost 30px for
+         reasons that have nothing to do with the path. */
       .sound-path-row {
         display: flex;
         align-items: flex-end;
         gap: 8px;
+        flex: 1 1 auto;
+        min-width: 0;
       }
 
       .sound-path-row .field-stack {
         flex: 1 1 auto;
         min-width: 0;
+      }
+
+      /* One fixed 36px slot holding the mode toggle and the confirm button.
+         They are stacked rather than sitting side by side, so swapping which one
+         is visible cannot change the slot width -- and that is what stops the
+         path input from resizing when an edit is pending. */
+      .sound-slot {
+        position: relative;
+        flex: 0 0 auto;
+        width: 36px;
+        min-width: 36px;
+        height: 40px;
+      }
+
+      .sound-slot > button {
+        position: absolute;
+        inset: 0;
+        width: 36px;
+        min-width: 36px;
+        height: 40px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sound-slot > button[hidden] {
+        display: none;
+      }
+
+      /* The confirm reads as "commit this", not as another setting, so it is
+         drawn in the accent colour rather than as a second grey button. */
+      .sound-confirm {
+        color: var(--mcode-accent);
+        border-color: var(--mcode-accent);
+      }
+
+      .sound-confirm svg {
+        width: 18px;
+        height: 18px;
       }
 
       /* Icon-only toggle: a fixed square keeps the row from reflowing when the
@@ -473,75 +529,96 @@
         margin-top: 12px;
       }
 
-      /* 应用 sits on its own row so the audition row can say what 试听 will do
-         before you press it.
-
-         This row must NOT wrap. flex-shrink only applies after line breaking, so
-         a wrapping row pushes Restore default onto a third line instead of
-         shortening the hint. nowrap makes the hint the only thing that gives
-         way, and it ellipsises. */
-      .sound-actions {
-        flex-wrap: nowrap;
-      }
-
+      /* 试听 and the two switches share one row: the switches sit right beside
+         the button at the row's natural width, and travel together so a narrow
+         panel wraps them as a unit instead of orphaning one. */
       .sound-actions > .btn {
         flex: 0 0 auto;
       }
 
+      /* What is playing, and what the next 试听 will fetch. They used to share
+         rows with other things: the current track sat beside the path input,
+         the next-track hint sat beside the 试听 button. Each of those left the
+         name about half a control short, and both had to shrink. On their own
+         lines, in the card's full width, they can be read. */
+      .sound-status {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--mcode-text-muted);
+      }
+
+      /* Both lines are the same shape: a fixed label, then the file name, which
+         takes the rest and is the only thing that gives way. Neither may push the
+         card wider, and both sit against the right edge so the row does not read
+         as left-heavy when the names are short. */
+      .sound-now,
       .sound-next {
-        flex: 0 1 auto;
-        min-width: 0;
-        align-self: center;
-        height: 40px;
         display: flex;
         align-items: baseline;
+        justify-content: flex-end;
         gap: 5px;
+        min-width: 0;
+        width: 100%;
         font-size: 12px;
         color: var(--mcode-text-muted);
         overflow: hidden;
       }
 
-      /* The author `display: flex` above beats the UA rule for [hidden]. */
-      .sound-next[hidden] {
+      /* The author `display: flex` / `.btn` rules beat the UA rule for
+         [hidden], so both need it spelled out. */
+      .sound-next[hidden],
+      .sound-confirm[hidden] {
         display: none;
       }
 
-      .sound-next .sound-next-label {
+      /* Shared by 当前曲目 and 下一首. A bare filename with no label says the same
+         thing on both lines, so the label is what tells them apart. */
+      .sound-line-label {
         flex: 0 0 auto;
         white-space: nowrap;
       }
 
-      .sound-next .sound-next-name {
+      /* Real file names are unbounded, and the tail is the part that identifies
+         one: the extension, and the last words of the name. So the name is
+         truncated at the START and the head is what disappears.
+
+         The cap is the row width minus 7em. 7em is the widest label any pack
+         ships — `Current track` is about 6.5em at 12px — plus the 5px gap, so
+         label + name always fits and the name's right edge (the part that has to
+         stay visible) is never the thing that gets clipped. `em` is the row's own
+         font size, so the cap follows the panel instead of being a pixel constant
+         that is only right at 463px.
+
+         `direction: rtl` moves the overflow to the left edge: with the default
+         LTR, text-overflow clips the tail and the name reads `deep-resonance…`
+         with no extension at all. It only sets the paragraph direction for this
+         one span; the Latin run itself still renders left-to-right, and the title
+         attribute keeps the full path. */
+      .sound-line-name {
         flex: 0 1 auto;
         min-width: 0;
+        max-width: calc(100% - 7em);
         color: var(--mcode-text);
         font-weight: 600;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        direction: rtl;
+        text-align: right;
       }
 
-      .sound-actions-tail {
-        margin-top: 8px;
-      }
+      /* 试听 and the two switches share one row: the toggles are an inline-flex
+         unit, so on a panel too narrow for all of it they wrap together instead
+         of orphaning one checkbox, and the button stays on the left. */
 
-      /* Current track name: takes the slack on the path row, truncates. */
-      .sound-now {
-        flex: 1 1 40px;
-        min-width: 0;
-        align-self: flex-end;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        font-size: 12px;
-        color: var(--mcode-text-muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
 
       /* Both checkboxes travel together so a narrow row wraps them as a unit
-         instead of orphaning one. */
+         instead of orphaning one. They sit right next to 试听 at whatever width
+         the row gives them — not parked against the far edge, which pulled them
+         away from the button they belong with. */
       .sound-toggles {
         display: inline-flex;
         align-items: center;
@@ -869,7 +946,7 @@
 
         <section class="card" aria-labelledby="soundHeading">
           <h2 id="soundHeading" data-i18n="card.sound">提醒音</h2>
-          <p class="hint" data-i18n="card.sound.hint"></p>
+          <p class="hint" id="soundHint"></p>
           <form class="field" id="soundForm">
             <div class="sound-path-row">
               <label class="field-stack" for="soundPathInput">
@@ -883,18 +960,45 @@
                   autocomplete="off"
                 />
               </label>
-              <!-- One button, two states: it toggles between 顺序 and 随机. A two
-                   button segmented control cost a whole row for no extra function. -->
-              <!-- One button, two states, shown as an icon rather than text: the
-                   glyph IS the state, and a 36px button leaves the track name
-                   more room. Text labels are kept for screen readers. -->
-              <button
-                type="button"
-                class="btn btn-secondary sound-mode-toggle"
-                id="soundModeToggle"
-                aria-pressed="true"
-                title=""
-              >
+              <!-- One fixed 36px slot with two occupants, never both visible. The
+                   confirm takes the toggle's place while an edit is pending, so
+                   the slot width -- and therefore the path input's width --
+                   cannot change, and a long path can never push anything off
+                   the panel. -->
+              <span class="sound-slot">
+                <button
+                  type="submit"
+                  class="btn sound-confirm"
+                  id="soundConfirmBtn"
+                  data-i18n-aria="btn.applyPath"
+                  title=""
+                  hidden
+                >
+                  <svg
+                    class="icon-confirm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="4 12.5 9.5 18 20 6" />
+                  </svg>
+                </button>
+                <!-- One button, two states: it toggles between 顺序 and 随机. A two
+                     button segmented control cost a whole row for no extra
+                     function. Shown as an icon rather than text: the glyph IS the
+                     state, and a 36px button leaves the track name more room. Text
+                     labels are kept for screen readers. -->
+                <button
+                  type="button"
+                  class="btn btn-secondary sound-mode-toggle"
+                  id="soundModeToggle"
+                  aria-pressed="true"
+                  title=""
+                >
                 <svg
                   class="icon-sequence"
                   viewBox="0 0 24 24"
@@ -929,17 +1033,21 @@
                   <line x1="4" y1="4" x2="9" y2="9" />
                 </svg>
               </button>
-              <span class="sound-now" id="soundNowTrack"></span>
+              </span>
             </div>
           </form>
-          <div class="actions sound-actions">
-            <span class="sound-next" id="soundNextTrack" hidden
-              ><span class="sound-next-label" data-i18n="sound.next">下一首</span
-              ><span class="sound-next-name" id="soundNextName"></span
+          <div class="sound-status">
+            <span class="sound-now"
+              ><span class="sound-line-label" data-i18n="sound.now">当前曲目</span
+              ><span class="sound-line-name" id="soundNowTrack"></span
             ></span>
-            <button type="button" class="btn btn-secondary" id="testSoundBtn" data-i18n="btn.preview">试听</button>
+            <span class="sound-next" id="soundNextTrack" hidden
+              ><span class="sound-line-label" data-i18n="sound.next">下一首</span
+              ><span class="sound-line-name" id="soundNextName"></span
+            ></span>
           </div>
-          <div class="actions sound-actions sound-actions-tail">
+          <div class="actions sound-actions">
+            <button type="button" class="btn btn-secondary" id="testSoundBtn" data-i18n="btn.preview">试听</button>
             <span class="sound-toggles">
               <label class="pin">
                 <input type="checkbox" id="soundLoop" />
@@ -1036,6 +1144,7 @@
               '改完点「应用」立即生效，只影响之后开始的那一段。已经开始或暂停中的那段长度不变。',
             'field.minutes': '分钟（1–180）',
             'btn.apply': '应用',
+            'btn.applyPath': '应用这个路径',
             'group.presets': '常用时长',
             'preset.p15': '15 分钟',
             'preset.p25': '25 分钟',
@@ -1043,7 +1152,7 @@
             'preset.p60': '60 分钟',
             'card.sound': '提醒音',
             'card.sound.hint':
-              '填音频文件或文件夹路径即可替换默认提示音。相对路径以插件目录为基准（如 sounds/），绝对路径用本机任意位置；留空则用内置的合成音。改完按回车生效；清空后按回车即恢复内置音。',
+              '填音频文件或文件夹路径即可替换默认提示音。相对路径以插件目录为基准（如 sounds/），绝对路径用本机任意位置。按 <kbd>Enter</kbd> 生效；清空后按 <kbd>Enter</kbd> 就退回页面现场合成的提示音，背后没有音频文件。',
             'sound.current': '当前：',
             'sound.default': '默认提示音',
             'field.soundpath': '音频文件或文件夹路径',
@@ -1052,6 +1161,7 @@
             'sound.mode.hint': '点一下切换播放方式（顺序 / 随机）。',
             'sound.loop': '单曲循环',
             'sound.normalize': '音量标准化',
+            'sound.now': '当前曲目',
             'sound.next': '下一首',
             'sound.previewing': '试听中：',
             'sound.pinned': '单曲循环锁定：',
@@ -1083,8 +1193,11 @@
             'conn.online': '已连接',
             'conn.offline': '连接断开，正在重试',
             'unit.minutes': '{n} 分钟',
-            'unit.h': '{n}h',
-            'unit.m': '{n}m',
+            // Compact forms for the 累计专注 readout. formatFocus glues these two
+            // together with no separator (`2小时30分`), so they must not carry the
+            // space that unit.minutes uses inside a sentence.
+            'unit.h': '{n}小时',
+            'unit.m': '{n}分',
             'err.duration.range':
               '时长需要在 {min}–{max} 秒之间（收到 {e} 分钟）。',
             'err.minutes': '请填 1 到 180 之间的分钟数。',
@@ -1125,6 +1238,7 @@
               'Apply takes effect immediately and only applies to the next segment. A running or paused segment keeps its length.',
             'field.minutes': 'Minutes (1–180)',
             'btn.apply': 'Apply',
+            'btn.applyPath': 'Apply this path',
             'group.presets': 'Common lengths',
             'preset.p15': '15 min',
             'preset.p25': '25 min',
@@ -1132,7 +1246,7 @@
             'preset.p60': '60 min',
             'card.sound': 'Alert sound',
             'card.sound.hint':
-              'Put a path to an audio file or a folder to replace the default chime. Relative paths resolve against the plugin folder (e.g. sounds/); absolute paths can point anywhere on this machine. Leave it blank to use a chime the page synthesises on the spot, with no audio file behind it. Press Enter to apply; clearing the field and pressing Enter goes back to that chime.',
+              'A file or a folder replaces the default chime. Relative paths resolve against the plugin folder (e.g. sounds/); absolute paths can point anywhere on this machine. Press <kbd>Enter</kbd> to apply. Clearing the box and pressing <kbd>Enter</kbd> goes back to a chime the page synthesises on the spot, with no audio file behind it.',
             'sound.current': 'Current: ',
             'sound.default': 'Default chime',
             'field.soundpath': 'Audio file or folder path',
@@ -1141,6 +1255,7 @@
             'sound.mode.hint': 'Tap to switch playback order (in order / shuffle).',
             'sound.loop': 'Loop this track',
             'sound.normalize': 'Normalise volume',
+            'sound.now': 'Current track',
             'sound.next': 'Next',
             'sound.previewing': 'Previewing:',
             'sound.pinned': 'Pinned:',
@@ -1218,6 +1333,7 @@
               '「適用」で即時に反映されます。次に開始する区間だけが対象で、進行中や一時停止中の区間の長さは変わりません。',
             'field.minutes': '分（1〜180）',
             'btn.apply': '適用',
+            'btn.applyPath': 'このパスを適用',
             'group.presets': 'よく使う長さ',
             'preset.p15': '15分',
             'preset.p25': '25分',
@@ -1225,7 +1341,7 @@
             'preset.p60': '60分',
             'card.sound': '通知音',
             'card.sound.hint':
-              '音声ファイルまたはフォルダのパスを入れると既定の音を置き換えられます。相対パスはプラグインのフォルダを基準に解決され（例: sounds/）、絶対パスならこのパソコン上の任意の場所を指定できます。空欄ならページ内でその場で合成した音を使います（音声ファイルは使いません）。変更は Enter キーで反映されます。空欄にして Enter でその音に戻ります。',
+              '音声ファイルまたはフォルダのパスを入れると既定の音を置き換えられます。相対パスはプラグインのフォルダを基準に解決され（例: sounds/）、絶対パスならこのパソコン上の任意の場所を指定できます。<kbd>Enter</kbd> キーで反映されます。空欄にして <kbd>Enter</kbd> で、ページ内でその場で合成した音（音声ファイルは使いません）に戻ります。',
             'sound.current': '現在：',
             'sound.default': '既定の通知音',
             'field.soundpath': '音声ファイルまたはフォルダのパス',
@@ -1234,6 +1350,7 @@
             'sound.mode.hint': 'タップして再生順を切り替えます（順番 / ランダム）。',
             'sound.loop': 'この曲を繰り返し',
             'sound.normalize': '音量を正規化',
+            'sound.now': '現在の曲',
             'sound.next': '次の曲',
             'sound.previewing': '試聴中：',
             'sound.pinned': '固定中：',
@@ -1311,6 +1428,7 @@
               '「적용」하면 즉시 반영되며 다음에 시작할 구간에만 적용됩니다. 진행 중이거나 일시정지된 구간의 길이는 그대로입니다.',
             'field.minutes': '분(1~180)',
             'btn.apply': '적용',
+            'btn.applyPath': '이 경로 적용',
             'group.presets': '자주 쓰는 길이',
             'preset.p15': '15분',
             'preset.p25': '25분',
@@ -1318,7 +1436,7 @@
             'preset.p60': '60분',
             'card.sound': '알림음',
             'card.sound.hint':
-              '음성 파일 또는 폴더 경로를 넣으면 기본 알림음을 대체합니다. 상대 경로는 플러그인 폴더를 기준으로 계산되며(예: sounds/), 절대 경로는 이 컴퓨터의 어느 위치든 지정할 수 있습니다. 비워 두면 페이지에서 즉석으로 합성한 알림음을 사용합니다(음성 파일을 읽지 않습니다). 변경 사항은 Enter 키로 적용되며, 비운 뒤 Enter를 누르면 그 알림음으로 돌아갑니다.',
+              '음성 파일 또는 폴더 경로를 넣으면 기본 알림음을 대체합니다. 상대 경로는 플러그인 폴더를 기준으로 계산되며(예: sounds/), 절대 경로는 이 컴퓨터의 어느 위치든 지정할 수 있습니다. <kbd>Enter</kbd> 키로 적용됩니다. 비운 뒤 <kbd>Enter</kbd>를 누르면 페이지에서 즉석으로 합성한 알림음(음성 파일 없음)으로 돌아갑니다.',
             'sound.current': '현재: ',
             'sound.default': '기본 알림음',
             'field.soundpath': '음성 파일 또는 폴더 경로',
@@ -1327,6 +1445,7 @@
             'sound.mode.hint': '탭하면 재생 순서를 바꿉니다(순서 / 랜덤).',
             'sound.loop': '이 곡 반복',
             'sound.normalize': '음량 정규화',
+            'sound.now': '현재 곡',
             'sound.next': '다음 곡',
             'sound.previewing': '미리듣기:',
             'sound.pinned': '고정됨:',
@@ -1421,8 +1540,9 @@
             ariaNodes[i].setAttribute('aria-label', t(ariaNodes[i].dataset.i18nAria));
           }
 
-          // These two carry a <kbd> element, so they are set as controlled markup
+          // These three carry a <kbd> element, so they are set as controlled markup
           // rather than textContent. The strings come from STRINGS, never from input.
+          el.soundHint.innerHTML = t('card.sound.hint');
           el.shortcutHint.innerHTML = t('shortcut.hint');
           el.appearanceHint.innerHTML = t('card.shortcut.hint');
 
@@ -1454,6 +1574,7 @@
           timer: document.getElementById('timer'),
           timerSub: document.getElementById('timerSub'),
           shortcutHint: document.getElementById('shortcutHint'),
+    soundHint: document.getElementById('soundHint'),
           appearanceHint: document.getElementById('appearanceShortcutHint'),
           progress: document.getElementById('progressFill'),
           primary: document.getElementById('primaryBtn'),
@@ -1473,6 +1594,7 @@
           soundNowTrack: document.getElementById('soundNowTrack'),
     soundNextTrack: document.getElementById('soundNextTrack'),
     soundNextName: document.getElementById('soundNextName'),
+    soundConfirmBtn: document.getElementById('soundConfirmBtn'),
           soundLoop: document.getElementById('soundLoop'),
           soundNormalize: document.getElementById('soundNormalize'),
           testSound: document.getElementById('testSoundBtn'),
@@ -1558,14 +1680,24 @@
         // mode changes, since the armed track moves with it.
         var previewIndex = 0;
         // File name the last 试听 actually fetched, shown in place of the armed
-        // track until the next real reminder loads. Null when not auditioning.
+        // track until a real reminder plays or the sound is re-armed. Null when
+        // not auditioning.
         var auditionName = null;
         // File name the next 试听 press will fetch, reported by the same response
         // that served the current one. The server resolves it with the same pure
         // function it used to pick this track, so the hint cannot drift from the
-        // real order. Null until the first load, and whenever there is nothing to
-        // walk to.
+        // real order. Null until the first audition, and whenever there is nothing
+        // to walk to.
         var nextTrackName = null;
+        // The same two names, kept so a second press at the offset already in the
+        // buffer can restore the label and the hint without another round trip.
+        var auditionTrackName = null;
+        var auditionNextName = null;
+        // The path box is a draft: it can hold an edit the server has not been
+        // told about yet. The confirm button beside it is the only visible sign
+        // of that, so blur must NOT quietly overwrite the box — otherwise the
+        // button stays lit while the text it referred to is gone.
+        var pathDirty = false;
         // Optimistic value for the 单曲循环 checkbox while its request is in
         // flight, so a background frame cannot revert the tick under the cursor.
         // Null means "follow the server".
@@ -1801,6 +1933,17 @@
           // press would hit the previous preview's cache.
           var key = name + '#' + version + '#' + (track || '') + (preview ? '#p' + preview : '');
           if (customSoundKey === key && customSoundBuffer) {
+            // A cache hit still has to restore the label and the hint. Returning
+            // straight away made the SECOND press of 试听 at an offset already
+            // fetched play the right file while the label stayed on the armed
+            // track and the next-track hint never moved, which read as "the
+            // button did nothing".
+            if (preview) {
+              auditionName = auditionTrackName;
+              nextTrackName = auditionNextName;
+              renderSoundNext();
+              if (auditionName) renderSoundLabel();
+            }
             return Promise.resolve(true);
           }
           customSoundKey = key;
@@ -1813,10 +1956,14 @@
           )
             .then(function (response) {
               if (!response.ok) throw new Error('sound_unavailable');
-              // An audition plays a different file than the armed track, so the
-              // label has to follow what was actually served, not what is queued.
-              // A normal load clears the override so the next real reminder
-              // takes the label back.
+              // Only an audition owns the label and the Next hint. Every
+              // reconcile also warms the ARMED track, and that used to run
+              // `auditionName = preview ? served : null` a moment after each
+              // 试听, snapping the label back to the armed file and resetting
+              // the hint to the armed track's successor — which is why locking
+              // the auditioned song kept locking the wrong one. A non-audition
+              // load must leave both alone.
+              //
               // Reading the header must never be able to break playback, so it is
               // guarded: if it is missing the audio still plays and the label
               // simply falls back to the armed track.
@@ -1824,16 +1971,23 @@
                 response.headers && typeof response.headers.get === 'function'
                   ? response.headers.get('x-sound-track')
                   : null;
-              auditionName = preview ? served : null;
               // The same response names the track the NEXT 试听 press will fetch.
               // Read it whenever it is there; a missing header just means the
               // hint stays empty, never that playback breaks.
-              nextTrackName =
+              var servedNext =
                 response.headers && typeof response.headers.get === 'function'
                   ? response.headers.get('x-sound-next-track')
                   : null;
-              renderSoundNext();
-              if (preview && auditionName) renderSoundLabel();
+              if (preview) {
+                auditionName = served;
+                nextTrackName = servedNext;
+                // Remembered with the buffer so a later cache hit can replay the
+                // same label and hint without another round trip.
+                auditionTrackName = served;
+                auditionNextName = servedNext;
+                renderSoundNext();
+                if (auditionName) renderSoundLabel();
+              }
               return response.arrayBuffer();
             })
             .then(function (encoded) {
@@ -1886,11 +2040,34 @@
           } catch (error) {
             /* private mode: chime every time rather than never */
           }
+          // A real reminder takes the label back: what the app shows has to
+          // describe what it just played, and the armed track has now moved.
+          clearAudition();
           playReminderSound();
         }
 
-        // ------------------------------------------------------------------- data
+        /**
+         * Drop the audition overlay: the label goes back to the armed track and
+         * the Next hint disappears, because neither describes the playlist any
+         * more. Called when a real reminder plays and whenever the sound is
+         * re-armed — a new folder, a cleared path or a mode switch all move the
+         * cursor the hint was predicting.
+         */
+        function clearAudition() {
+          if (!auditionName && !nextTrackName) return;
+          auditionName = null;
+          nextTrackName = null;
+          auditionTrackName = null;
+          auditionNextName = null;
+          // The audition offset is relative to the armed track, and whatever moved
+          // that track just invalidated it, so the next press starts from the new
+          // first candidate rather than counting on from the old one.
+          previewIndex = 0;
+          renderSoundNext();
+          renderSoundLabel();
+        }
 
+                // ------------------------------------------------------------------- data
         // Last path segment, for showing which file a folder will play.
         function baseName(p) {
           var parts = String(p).split(/[\\/]/);
@@ -1901,23 +2078,53 @@
          * Disclosure for the audition button: name the track the next 试听 press
          * will play, so the button stops being a black box.
          *
-         * Nothing to walk to means nothing to say — no folder, a single file
-         * (试听 replays the same one every time), or a lock (单曲循环 already means
-         * "this one, forever"). The hint then hides instead of showing a name
-         * that would be a lie.
+         * The row is ALWAYS on screen. It used to be hidden whenever there was
+         * nothing distinct to walk to, which is the common case -- a pin, a single
+         * file, or the built-in synthesised chime with no file at all -- and the
+         * card lost a line each time, so the whole panel jumped the moment the
+         * audition button was pressed.
+         *
+         * When the next track IS the current one, the row says a dash rather than
+         * repeating the file name. Two identical lines tell the reader nothing
+         * they cannot see one line above, and cost a second read of a long name.
+         * The dash is deliberately not translated: it is punctuation, not a word.
          */
         function renderSoundNext() {
           var node = el.soundNextTrack;
           if (!node) return;
-          var walkable = Boolean(
-            snapshot.soundPath && snapshot.soundMode !== 'single' && !snapshot.soundPinned,
-          );
-          var name = walkable && nextTrackName ? baseName(nextTrackName) : '';
+          // An audition knows its own successor, because the response that served
+          // it also named the next offset. Otherwise the snapshot does: that is
+          // what makes the row correct before the first press.
+          var next = nextTrackName || snapshot.soundNext || null;
+          // Compared against the RENDERED current name, not a second copy of it.
+          var shown = el.soundNowTrack ? el.soundNowTrack.textContent.trim() : '';
+          var name = next && baseName(next) !== shown ? baseName(next) : '';
           if (el.soundNextName) {
-            el.soundNextName.textContent = name;
+            el.soundNextName.textContent = name || '–';
             el.soundNextName.title = name;
           }
-          node.hidden = !name;
+          node.hidden = false;
+        }
+
+        /**
+         * Whether the path box holds an unsaved edit, and therefore whether the
+         * confirm button is showing.
+         *
+         * Recomputed from the DOM rather than tracked through the request, so a
+         * save that the server rejected brings the button straight back: the
+         * snapshot still differs from what is typed.
+         */
+        function updatePathDraft() {
+          var saved = snapshot.soundInput || snapshot.soundPath || '';
+          pathDirty = el.soundPathInput.value.trim() !== saved;
+          if (el.soundConfirmBtn) {
+            el.soundConfirmBtn.title = t('btn.applyPath');
+            el.soundConfirmBtn.hidden = !pathDirty;
+          }
+          // The confirm shares the toggle's fixed slot, so the toggle steps
+          // aside entirely while an edit is pending. Both are hidden or shown
+          // together, which is also why the slot width never changes.
+          if (el.soundModeToggle) el.soundModeToggle.hidden = pathDirty;
         }
 
         /**
@@ -1934,9 +2141,11 @@
             el.soundNowTrack.textContent = t('sound.default');
             el.soundNowTrack.title = '';
           } else if (snapshot.soundPinned) {
-            // Show the lock, so "why is it not changing" is answered on screen
-            // rather than left for the user to work out from a dead mode button.
-            el.soundNowTrack.textContent = '🔒 ' + baseName(snapshot.soundPinned);
+            // No lock glyph in front of the name. The disabled mode button and
+            // this element's tooltip already say the track is pinned, and a
+            // second marker only crowded the row -- and broke copy-paste of the
+            // file name. The name here is exactly what 试听 will play.
+            el.soundNowTrack.textContent = baseName(snapshot.soundPinned);
             el.soundNowTrack.title = t('sound.pinned') + ' ' + snapshot.soundPinned;
           } else if (snapshot.soundMode !== 'single' && snapshot.soundTrack) {
             el.soundNowTrack.textContent = baseName(snapshot.soundTrack);
@@ -1972,6 +2181,7 @@
             soundMode: next.soundMode || 'single',
             soundPinned: next.soundPinned || null,
             soundTrack: next.soundTrack || null,
+            soundNext: next.soundNext || null,
             soundVersion: next.soundVersion || 0,
           };
           deadlineAt =
@@ -2064,11 +2274,13 @@
           // The hint hides itself once a lock or a single file removes anything to
           // walk to, so it has to be re-evaluated whenever render() runs.
           renderSoundNext();
-          if (document.activeElement !== el.soundPathInput) {
+          if (document.activeElement !== el.soundPathInput && !pathDirty) {
             // Show what was configured. A relative path round-trips as `sounds`,
             // not as the runtime's temp directory, which changes every restart.
+            // Skipped while a draft is pending, so blur cannot throw the edit away.
             el.soundPathInput.value = snapshot.soundInput || snapshot.soundPath || '';
           }
+          updatePathDraft();
           // The glyph shows the CURRENT mode (see CSS: the two SVGs swap on
           // aria-pressed). Text moves to the accessible name so a screen reader
           // still announces the mode.
@@ -2206,6 +2418,9 @@
         function applySoundSetting(path) {
           busy = true;
           showSoundError('');
+          // Whatever was auditioned described the old playlist, so drop it now
+          // rather than one reconcile later.
+          clearAudition();
           return post('/api/settings/sound', { path: path, mode: soundModeChoice }).catch(
             function (error) {
               var payload = (error && error.payload) || {};
@@ -2291,8 +2506,16 @@
           if (busy) return;
           // A new folder or mode re-arms the playlist, so auditioning starts over.
           previewIndex = 0;
+          // Hide the confirm button now rather than after the round trip.
+          // updatePathDraft() runs on the next render, so a rejected save puts it
+          // straight back and leaves the typed text alone.
+          if (el.soundConfirmBtn) el.soundConfirmBtn.hidden = true;
           void applySoundSetting(el.soundPathInput.value.trim());
         });
+
+        // Any keystroke makes the box an unsaved draft, and that is what raises
+        // the confirm button. Nothing else needs to watch the field.
+        el.soundPathInput.addEventListener('input', updatePathDraft);
 
         // 恢复默认音 was removed as a button: clearing the field and pressing Enter
         // posts an empty path, and the server treats "" and null the same way --
@@ -2383,9 +2606,30 @@
           busy = true;
           pinPending = event.currentTarget.checked;
           showSoundError('');
-          // Pin/unpin on the server. `path` is deliberately omitted so this is
-          // not read as "clear the sound".
-          post('/api/settings/sound', { pin: pinPending })
+          // Pin whatever the LABEL is showing, read straight out of the DOM.
+          // The checkbox used to lock the armed track while the label showed the
+          // track being auditioned, so the app looked like it swapped songs under
+          // the click. Reading the rendered text means there is no second copy of
+          // that state to fall out of sync.
+          //
+          // `path` is deliberately omitted so this is not read as "clear the
+          // sound". The server matches the name only as a basename inside the
+          // scanned folder, and falls back to the armed track if it is unknown.
+          var payload = { pin: pinPending };
+          if (pinPending && snapshot.soundPath && el.soundNowTrack) {
+            var shown = el.soundNowTrack.textContent.trim();
+            if (shown) payload.track = shown;
+          }
+          // Ticking the box is itself a change to how the next track is picked, so
+          // the audition that produced the 下一首 row is no longer describing
+          // anything real. Drop it whole, exactly as a new path or a mode switch
+          // does: keeping the label but discarding the hint left the row claiming
+          // the next press would play a file the lock stops it from playing, and
+          // on the way back out the two rows no longer agreed with the press
+          // either. Done before the request, because a refused pin needs the same
+          // reset.
+          clearAudition();
+          post('/api/settings/sound', payload)
             .then(function () {
               pinPending = null;
             })

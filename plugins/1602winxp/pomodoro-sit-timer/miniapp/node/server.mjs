@@ -283,6 +283,10 @@ export async function start(context) {
           ? Math.max(0, state.remainingSec - elapsedSec)
           : state.remainingSec;
     const track = await currentTrack(state.reminderSeq);
+    // The same selector, one step further on. The 下一首 row is always on screen,
+    // so the Client needs an answer before the first 试听 rather than a row that
+    // only appears after a press — that would move the card under the pointer.
+    const nextTrack = await currentTrack(state.reminderSeq + 1);
     return {
       durationSec: state.durationSec,
       phase: state.phase,
@@ -305,6 +309,9 @@ export async function start(context) {
       // Resolved absolute path of the track this reminder will play, or null if
       // the folder went empty or unreadable since it was configured.
       soundTrack: track,
+      // Resolved absolute path of the track the NEXT 试听 will fetch, or null
+      // when there is nothing to walk to (no file, a single file, or a pin).
+      soundNext: nextTrack,
       soundVersion: state.soundVersion,
       serverTime: Date.now(),
     };
@@ -487,6 +494,11 @@ export async function start(context) {
       state.soundRelative = false;
       state.soundMode = 'single';
       state.soundIndex = 0;
+      // The lock goes with the folder. It is a file NAME, so it survived the
+      // removal and came back silently the next time a folder holding a file of
+      // that name was configured — the app looked locked with nothing to show
+      // for it, and no box had been ticked.
+      state.soundPinned = null;
       state.soundVersion += 1;
       await persist();
       broadcast();
@@ -639,7 +651,21 @@ export async function start(context) {
     // `soundIndex` holds the reminder sequence the playlist was armed at, so
     // configuring a folder always starts at its first track regardless of how
     // many reminders happened earlier in the session.
-    const step = Math.max(0, seq - state.soundIndex);
+    return pickTrack(files, Math.max(0, seq - state.soundIndex));
+  }
+
+  /**
+   * The rotation itself, with no I/O and no state: which file does `step`
+   * reminders past the arming point resolve to?
+   *
+   * Split out of currentTrack so releasing a lock can ask the same question for a
+   * candidate step without re-reading the folder once per candidate.
+   *
+   * @param {string[]} files name-sorted playlist
+   * @param {number} step reminders since the playlist was armed
+   * @returns {string}
+   */
+  function pickTrack(files, step) {
     if (state.soundMode === 'shuffle') {
       // Re-shuffle each time the playlist completes, then walk it to the end.
       // A per-cycle permutation guarantees every track plays exactly once before
@@ -650,6 +676,39 @@ export async function start(context) {
       return files[order[step % files.length]];
     }
     return files[step % files.length];
+  }
+
+  /**
+   * Releasing 单曲循环 must not change which song the app is on.
+   *
+   * While a track is pinned every currentTrack() call returns that file, so the
+   * playlist cursor never moves. Unticking then snapped the armed track straight
+   * back to wherever the cursor had been frozen — the row visibly jumped to a
+   * different file for an action the user took to stop repeating, not to switch
+   * songs. Every music player resumes from the current track here.
+   *
+   * So the arming point moves instead: find the step that resolves to the track
+   * that was just released and set soundIndex to it. The search is bounded by two
+   * playlist cycles, which is enough for both modes; if nothing matches — the
+   * file may have been deleted meanwhile — the cursor is left where it was, which
+   * is the old behaviour rather than a worse one.
+   *
+   * @param {string} released file name the lock was holding
+   */
+  async function rebaseAfterRelease(released) {
+    if (state.soundPath === null || state.soundMode === 'single') return;
+    const scanned = await scanDirectory(state.soundPath);
+    if (scanned.error) return;
+    const files = scanned.files;
+    if (files.length < 2) return;
+    if (!files.some((f) => basename(f) === released)) return;
+    const before = state.soundIndex;
+    for (let step = 0; step < files.length * 2; step += 1) {
+      if (basename(pickTrack(files, step)) !== released) continue;
+      state.soundIndex = state.reminderSeq - step;
+      return;
+    }
+    state.soundIndex = before;
   }
 
   /**
@@ -874,7 +933,29 @@ export async function start(context) {
         // read as "clear the sound", which is what an undefined path means.
         if (body.path === undefined && (body.pin === true || body.pin === false)) {
           const current = await currentTrack(state.reminderSeq);
-          state.soundPinned = body.pin === true && current ? basename(current) : null;
+          if (body.pin !== true) {
+            const released = state.soundPinned;
+            state.soundPinned = null;
+            if (released !== null) await rebaseAfterRelease(released);
+          } else {
+            // Pin the track the Client says it is PLAYING, not the armed one.
+            // Ticking the box during an audition used to lock a different file
+            // than the one on screen, so the label appeared to swap songs.
+            //
+            // The name is only ever basename()d and compared against the scanned
+            // folder, so it cannot steer a read outside it; an unknown name
+            // falls back to the armed track.
+            let match = null;
+            if (typeof body.track === 'string' && state.soundPath !== null) {
+              const wanted = basename(body.track.trim());
+              const scanned = await scanDirectory(state.soundPath);
+              if (!scanned.error) {
+                match = scanned.files.find((f) => basename(f) === wanted) || null;
+              }
+            }
+            const pinned = match || current;
+            state.soundPinned = pinned ? basename(pinned) : null;
+          }
           state.soundVersion += 1;
           await persist();
           broadcast();
