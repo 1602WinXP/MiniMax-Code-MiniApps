@@ -40,13 +40,15 @@ To update, close the app, exit MiniMax Code, and replace the whole plugin direct
 
 ## Alert sound
 
-The **Audio file or folder path** box accepts either a **single file** or a **folder**. A folder is scanned one level deep, keeps `.mp3` / `.wav` / `.ogg` only, and is sorted by name so that `2.mp3` comes before `10.mp3`. Leave it blank to keep the built-in chime.
+The **Audio file or folder path** box accepts either a **single file** or a **folder**. A folder is scanned one level deep, keeps `.mp3` / `.wav` / `.ogg` only, and is sorted by name so that `2.mp3` comes before `10.mp3`.
+
+Leave it blank and the alert uses a chime the page **synthesises on the spot** — three sine tones (G5, C6, E6) built with the Web Audio API. There is no audio file behind it and no request leaves the machine. The same chime is used whenever a configured file cannot be read, so a moved or deleted track never silences the alert. The three `sounds/chime-*.wav` files shipped with this package are **samples, not a fallback**: they are only heard if you point the box at them.
 
 - **In order / Shuffle** — the icon button next to the path box toggles between the two. Shuffle reorders the whole folder each time you get through it, so a pass never repeats a track and never skips one.
 - **Loop this track** — locks playback to one file. The lock lives on the server, so the file plays once per alert and stays put across restarts. While it is on, the order/shuffle button is disabled, and **Preview** plays the pinned track too.
 - **Normalise volume** — on by default, and it works in **both directions**: quiet tracks are lifted and loud ones are brought down, so a quiet folder and a loud folder play at the same level. One track is measured and becomes the target level for the whole playlist. That track is whichever one is playing the first time normalisation reaches your audio — on a fresh install, the first track you play; if you tick the box yourself, the one you are listening to at that moment, so un-ticking and re-ticking re-picks it. The measured level is clamped to 0.25–0.89, kept in browser storage, and reused across restarts and across folders. Gain is capped at 40×, and a near-silent file is never chosen as the reference.
 - **Preview** — plays the next file in the running order rather than the one that is armed, so you can walk the whole folder. It does not change what the next real alert will play. The label to its left names the track the next press will play, so the button is not a black box.
-- **Applying a path** — press Enter in the path box. There is no Apply button: Enter commits, and clearing the box and pressing Enter falls back to the built-in chime.
+- **Applying a path** — press Enter in the path box. There is no Apply button: Enter commits, and clearing the box and pressing Enter goes back to the synthesised chime described above.
 
 A path such as `sounds` is resolved against the installed plugin directory, and a relative path cannot escape it. Because the client runs from a fresh temporary copy on every start, relative paths are re-resolved at launch rather than saved as absolute ones — an absolute path saved earlier would point at a directory that no longer exists. An absolute path is still accepted and may point anywhere on your machine.
 
