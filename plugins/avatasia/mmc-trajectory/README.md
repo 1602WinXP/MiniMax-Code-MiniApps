@@ -4,7 +4,20 @@ English | [简体中文](README.zh-CN.md)
 
 Browse the model trajectory of a MiniMax Code conversation: messages, reasoning, tool calls and their results, Token usage, and per-turn timing.
 
-Author: [avatasia](https://github.com/avatasia) · Version: `1.0.0`
+Author: [avatasia](https://github.com/avatasia) · Version: `1.1.0`
+
+### Before you change this page
+
+New features on this page grew one at a time, and most of the defects that survived review came from the same place: a control added without asking which layer it belongs to. So answer four questions in writing before writing any code.
+
+1. **Layer** — which functional layer does this belong to, and which layer's state does it write?
+2. **Relation** — beside, mutually exclusive with, or subordinate to which existing controls of that same layer?
+3. **Layout** — which container holds it? Does it need a new sticky region, panel, or layer?
+4. **Contract** — does it change a number another part of the page already promises? If yes, list every place that reads that number before you change it.
+
+The fourth is where the coordination bugs come from: one feature changed a number and every other surface kept speaking the old one. Mutual exclusion belongs in one place — one writer per state field — never as a convention spread across functions.
+
+`tests/` carries the regression guards for all of this; `npm test` runs them.
 
 ## Install and use
 
@@ -18,11 +31,15 @@ The author directory is only used to group contributions in the community reposi
 
 The page follows the most recent conversation by default and re-reads it every 2.5 seconds, so it stays live while you work; it pauses while the page is hidden. Each read is validated with an HTTP `ETag`: when the session file has not grown, the service answers `304 Not Modified` with no body and the page keeps what it already rendered. An idle tab therefore costs a few bytes per poll instead of the whole trajectory. Use the session picker to switch to any other conversation. No API key and no dependency installation are required — the package is dependency-free and needs no build step.
 
+When the session *has* grown, the poll carries `?since=<cursor>` alongside its validator and the service answers with the tail instead of the whole session: a payload of the same shape plus a `delta` marker, with `turns` holding only the turns that gained records. On a session of 21,000 records that is roughly 20 KB instead of 43 MB. The cursor is the highest `record.index` the page already holds — the same key `raw?index=` answers on — and it travels only with the validator it was taken against, so a session switch or a manual refresh sends the whole payload instead. `stats` and `session` travel whole in every tail: `stats` is an accumulator over all rows, so a tail cannot be added to it. A page that is ahead of the service (which is what a context-generation switch looks like from here) is answered with the whole payload, since a tail from there is empty and an empty tail is indistinguishable from "nothing to add". This saves transfer and the page's parsing, not the service's work — it still reads, parses and serializes the whole session to build the cache entry and to answer `raw`.
+
 ## What it shows
 
 The ledger groups records by turn, following the `turn_id` recorded in the session file. Each record is classified as user, answer, narration, thinking, tool call, tool result, system, or compaction, and each turn header carries that turn's own Token counts and elapsed time. Selecting a record opens a detail panel with summary, raw JSON, tool arguments, tool result, and reasoning, plus a button that hands the record to the Agent's chat input.
 
-**The type chips are the only filter over kinds.** One thing is being filtered — which record kinds are visible — and it is one array in the client, written from exactly three controls: the eight kind buttons, 全部, and 清除筛选. An earlier version also had a row of layer buttons (turn / thinking / call) sitting above the list as presets over those same chips. They were removed, because any preset a reader outgrows becomes a button that contradicts the chips it was supposed to summarise: untick 问答 while leaving 用户 ticked, and the turn button goes dark and claims the conversation is hidden when in fact it was narrowed. One control that cannot drift is worth more than three convenient ones that can. Two further controls cut across kinds instead of over them: a time range, which bounds the ledger to a wall-clock window, and an anomaly filter, whose rules pick out records that are wrong — a failed tool call, a compaction, a turn that never got an answer, an answer that came back empty — rather than records of a particular kind. Neither rewrites the kind array, so every kind chip still answers exactly one question.
+**The type chips are the only filter over kinds.** One thing is being filtered — which record kinds are visible — and it is one array in the client, written from exactly four controls: the eight kind buttons, 全部, 清除筛选, and the anomaly filter. An earlier version also had a row of layer buttons (turn / thinking / call) sitting above the list as presets over those same chips. They were removed, because any preset a reader outgrows becomes a button that contradicts the chips it was supposed to summarise: untick 问答 while leaving 用户 ticked, and the turn button goes dark and claims the conversation is hidden when in fact it was narrowed. One control that cannot drift is worth more than three convenient ones that can. Two further controls cut across kinds instead of over them: a time range, which bounds the ledger to a wall-clock window, and an anomaly filter, whose rules pick out records that are wrong — a failed tool call, a compaction, a turn that never got an answer, an answer that came back empty — rather than records of a particular kind.
+
+**The anomaly filter is the one cut-across control that also rewrites the kind array**, and deliberately so: ticking an anomaly rule calls the same `resetBaseFilters()` the 清除筛选 button calls, which returns kinds to all, clears the search box, drops any brush on the overview strip, and clears the time range. Without that, a reader could tick 工具失败 with 问答 unticked, see nothing, and have no way back except hunting for which of five controls to undo. The cost is stated here because it is a real cost: the chips stop being a filter you keep while you narrow by error — so 「只回答一个问题」 holds for the chips only outside anomaly mode, which is also when they are the only thing still in play. A time range and a search term still never rewrite the kind array.
 
 Naming kinds directly costs one extra click and reaches everything a preset did — tick 用户 *and* 答复 for the conversation, untick both for its absence, and any scattered subset in between, such as only the user's questions or only system records.
 

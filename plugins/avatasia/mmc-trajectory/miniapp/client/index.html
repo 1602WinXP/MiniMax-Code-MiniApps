@@ -504,6 +504,67 @@
         color: inherit;
       }
 
+      /* A rule with nothing to find stays listed — "none of these happened" is a different fact
+         from "this is not available" — but it is not dressed as a button that will return rows.
+         The count still carries it, so this is a dim, never a hide. */
+      .anomaly-btn.is-empty .anomaly-count {
+        opacity: 0.55;
+      }
+
+      /* 异常 sits directly under the type axis because both answer the same question — which
+         records the ledger shows — so the two read as one strip of choices. Same 16px gutter as
+         .traj-controls, so its left edge lines up with the 全部 button above it. */
+      .anomaly-bar {
+        display: flex;
+        flex: none;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--mcode-border);
+      }
+
+      .anomaly-bar-label {
+        font-size: 12px;
+        color: var(--mcode-text-subtle);
+      }
+
+      /* The 多选 switch. It is a real checkbox so it is announced and operable by keyboard with
+         no extra work, and it is small so it reads as a switch rather than a third kind of
+         filter. Its own text, not colour, is what says which mode is in force. */
+      .anomaly-multi {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--mcode-text-muted);
+        cursor: pointer;
+      }
+
+      .anomaly-multi input {
+        margin: 0;
+      }
+
+      .anomaly-multi:has(input:checked) {
+        color: var(--mcode-text);
+      }
+
+      .anomaly-bar-note {
+        font-size: 12px;
+        color: var(--mcode-text-subtle);
+      }
+
+      /* In 异常 mode the type axis, the search box and the time range do not apply. They are
+         dimmed rather than left looking live: a control that cannot change what is on screen
+         and still takes clicks is the exact defect this axis was moved to fix. The JS also sets
+         `inert` on them, so keyboard focus cannot land on a control that does nothing.
+         会话 / 上下文代 / 刷新 are deliberately unmarked — they choose which session is on
+         screen, not which records, and have to keep working. */
+      body[data-anomaly-mode='on'] [data-filter-scope] {
+        opacity: 0.4;
+        filter: grayscale(1);
+      }
+
       .range-sep {
         font-size: 12px;
         color: var(--mcode-text-subtle);
@@ -770,21 +831,116 @@
          on. The reference styles the glyph rather than the button, so the button stays
          flat when pressed and only the mark changes. */
 
-      .traj-controls {
+      /* One sticky band for both filter axes.
+
+         The type row and the 异常 row decide the same question — which records the ledger shows —
+         so they are pinned as a single block rather than one of them following the other out of
+         view. Only the type row claimed `position: sticky` before, and it did not survive: with
+         the ledger below it and both rows scrolled away, a session filtered down to a few hundred
+         rows gave no sign that anything was filtered at all. The band carries its own background
+         because it now sits over the ledger, which is opaque underneath it.
+
+         Everything pinned below this measures its offset from it rather than assuming it — see
+         syncStickyOffsets(). The anomaly row wraps at narrow widths and the note under it comes
+         and goes, so its height is not a number anyone can write down once. */
+      .filter-sticky {
         position: sticky;
         top: 0;
-        z-index: 5;
-        display: flex;
-        flex: none;
-        align-items: center;
-        padding: 6px 16px;
+        z-index: 6;
         background: var(--mcode-bg);
         border-bottom: 1px solid var(--mcode-border);
       }
 
-      .traj-controls-actions {
+      .traj-controls {
         display: flex;
         flex: none;
+        /* The type row's intrinsic width is 574px — ten Chinese labels, measured,
+           and it does not move with the viewport. A `flex: none` row is sized by its
+           content, so the content is also free to widen the page: below 640px the
+           document measured 622px wide at every viewport and the window scrolled
+           sideways by up to 262px.
+
+           Capping the row at the viewport is what lets the chips below step down.
+           `flex-wrap` alone does nothing here, and the reason is worth recording
+           because it reads like a working fix: a shrink-to-fit flex container is
+           always exactly as wide as its widest line, so it can never wrap. Declared
+           wrap, measured with wrap removed — identical, every width. The cap is what
+           gives the row a width other than its own content, and only then does the
+           wrap below have something to do. At 640px and up this cap never binds:
+           measured band heights are unchanged at every width in that range. */
+        max-width: 100%;
+        align-items: center;
+        padding: 6px 16px;
+        background: var(--mcode-bg);
+      }
+
+      /* The 上下文代 picker is L1 — it chooses which slice of the conversation is on screen,
+         the same class of control as 会话 — so it belongs in the band that does not scroll
+         away, not in the toolbar that does. It shares the type row when the width allows and
+         drops to a line of its own when it does not.
+
+         `flex-wrap` is the entire graceful-degradation story, and it is here because
+         .traj-controls is `flex: none`: without wrapping, a tail that does not fit would push
+         the row wider than the page instead of stepping down. Wrapping keeps the band honest
+         at every width — no clipping, no sideways overflow, and no assumption about which
+         widths are "normal". Nothing in this arrangement is measured by hand: syncStickyOffsets()
+         reads the band's real offsetHeight on the one exit that can change it (D9). */
+      .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 12px;
+      }
+
+      /* Only the right padding: `margin-left: auto` is what separates this from the type row, and a
+         left padding here is width the row has to find. It is 32px of the 9px shortfall measured on
+         2026-10-12 — the arithmetic that predicted the picker would fit had forgotten that this box
+         carries its own padding at all, so the browser is the only authority on whether they share
+         a line and this is the second attempt. The right padding keeps the picker's right edge on
+         the same 790px line the toolbar's fields end on. */
+      .filter-row-tail {
+        display: flex;
+        flex: none;
+        align-items: center;
+        margin-left: auto;
+        padding: 6px 16px 6px 0;
+      }
+
+      /* 14px/36px is the toolbar's control size. Every other control in this band is a 20px
+         chip, so carrying the toolbar's height would grow the band by 16px on every page — and
+         the band is pinned over the ledger, so its height is reading area the reader does not
+         get. Only the size changes; the options, their labels and their counts are untouched.
+         No width is set here: the browser sizes a <select> to the widest option it has to draw,
+         and a number written in the stylesheet would only be a guess at that on this machine. */
+      .filter-row-tail select {
+        min-height: 20px;
+        font-size: 12px;
+        border-radius: 4px;
+      }
+
+      /* The ten type chips must wrap, for the same reason .filter-row does.
+         The band is a two-level degradation: the outer row wraps so the picker
+         steps down instead of pushing the row wide, and the inner chip row wraps
+         so ten chips step down instead of doing exactly that to the page.
+         Only the outer half was written, and the inner half is what actually
+         decides the width — measured at 574px flat from a 360px viewport up,
+         so below 640px the document was 22–262px wider than the window with
+         .traj-controls still `flex: none` and no way to save it.
+
+         The chip row is the one place that gives way, which is why it is not
+         `flex: none` the way its neighbours are. A shrink-to-fit row is exactly
+         as wide as its widest line and can never wrap; `min-width: 0` is what
+         lets the content's minimum size stop deciding for it. Neither property
+         does anything on its own — measured, each alone changed nothing.
+
+         This is the defect the .filter-row comment claimed was already
+         prevented: 「no clipping, no sideways overflow」 was true of the row and
+         false of the page. */
+      .traj-controls-actions {
+        display: flex;
+        flex: 0 1 auto;
+        min-width: 0;
+        flex-wrap: wrap;
         align-items: center;
         gap: 2px;
       }
@@ -798,6 +954,15 @@
         color: var(--mcode-text-muted);
         font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
         font-size: 14px;
+      /* The picker used to step aside while the reader scrolled down and came straight back on
+         any upward movement, driven by a `body.is-reading-down` class on <body>. Withdrawn on
+         2026-10-12, and the reason is the one this file's own comment used to argue against:
+         a control that hides itself the moment the reader starts reading is gone at exactly the
+         moment it is wanted, and scroll direction is not a statement about which filters the
+         reader wants. It also meant visibility inside this band was decided from outside it, by
+         a signal that has nothing to do with filtering. What decides visibility here now is the
+         band's own state — a pinned 上下文代 and the 异常 axis — and nothing else. */
+
         line-height: 14px;
       }
 
@@ -880,8 +1045,16 @@
 
       .overview {
         position: sticky;
-        top: 32px;
+        top: var(--sticky-band-h, 32px);
         z-index: 4;
+        background: var(--mcode-bg);
+        /* The background above is load-bearing, not decoration. This is the one strip in the pinned
+           stack that sits directly on top of another, so it has to cover what scrolls into its
+           seam by itself. It used to borrow that paint from .overview-plot, the 50px that draws
+           the three lanes, and the ledger's window bar (z-index 3) came up through the gap as a
+           clipped line of its own text. verify-sticky.mjs asserted the plot was opaque and called
+           that the strip being opaque, so nothing caught it. Every other strip here
+           (.filter-sticky, .window-bar, .turn-head) carries its own. */
         border-bottom: 1px solid var(--mcode-border);
         user-select: none;
       }
@@ -1106,6 +1279,51 @@
         align-items: start;
       }
 
+      /* ---------------- D40: the inspector's own viewport, on wide screens ----------
+       *
+       * Measured 2026-10-13 at 1276x1280 with one record selected: the right column is a static
+       * block 833px tall sitting at the top of a 7,545px grid row, so it scrolled away after about
+       * 600px and never came back — invisible for 88% of the trajectory. The ledger scrolls; the
+       * inspector is the thing being read while it scrolls.
+       *
+       * The mirror image of what D36 does on a narrow screen, and deliberately not the same
+       * mechanism: there the panel pins to the viewport BOTTOM because it is the last thing in the
+       * document, here it pins just under the stacked strips because the ledger beside it is a
+       * quarter of a million pixels tall. Both are 「stop scrolling away」, and they take opposite
+       * offsets because the thing that scrolls is on the other side.
+       *
+       * `top` is the sum of the two measured strips rather than a number, and the two variables are
+       * read rather than re-measured here: band is L2 and overview is L3, and re-deriving their
+       * heights inside the inspector's rule would be a fifth place holding the same fact (verify-
+       * generation-pin's 23 assertions exist to keep the fourth from drifting). The window bar is
+       * left out of the sum because it only ever occupies the LEFT column.
+       *
+       * The ceiling is `--inspector-wide-h`, written by syncStickyOffsets() from window.innerHeight.
+       * It cannot be `100vh`: this page runs in a host iframe where vh is not the reader's viewport,
+       * which is the whole reason client-check bans it. A record measured 1,022px tall, so without a
+       * ceiling plus its own scroller the panel would simply grow past the fold again — the same
+       * invisible-again defect by a different door.
+       *
+       * The closer rides on this line on purpose. verify-comment-shape counts a line that is exactly a
+       * bare terminator as a closer with no opener, and this file's CSS comments open with a rule line
+       * for the same reason they close inline.
+       *
+       * A WARNING to whoever edits this block next, paid for once already. A comment in CSS does not
+       * nest, so a comment that spells the terminator inside itself ends there, on the spot. Everything
+       * after it — the rest of this prose, then the at-rule on the next line — becomes the prelude of a
+       * qualified rule whose selector is invalid, so the browser drops the whole block including the
+       * declarations nested inside it. What that looks like from the outside: the rule is present in
+       * the file, every guard that reads the text passes, the braces still balance, and the property
+       * simply does not exist. verify-comment-shape now scans the style block for the residue. */
+      @media (min-width: 1081px) {
+        #inspector-panel {
+          position: sticky;
+          top: calc(var(--sticky-band-h, 32px) + var(--sticky-overview-h, 51px));
+          max-height: var(--inspector-wide-h, 70vh);
+          overflow-y: auto;
+        }
+      }
+
       .panel {
         border: 1px solid var(--mcode-border);
         border-radius: 12px;
@@ -1129,9 +1347,84 @@
         border-bottom: 1px solid var(--mcode-border);
       }
 
+      /* The inspector's identifying rows stay put while its content scrolls under them.
+       *
+       * Three rows, one unit: the header with the record id, the 「第 N 轮 · #NNNNN · 思考」 line
+       * that says which turn this is, and the tab bar that says which view is open. None of them is
+       * readable without the other two, so they move together or not at all.
+       *
+       * They are a container rather than three sticky siblings with stacked `top` offsets, because
+       * those heights are not constants. Measured in the real window: the header is 49px at
+       * 1366x768 and **76px** at 1100x900, where a long record id wraps onto a second line. Three
+       * hardcoded offsets (49 / 85 / 124) would be right at one width and wrong the moment the head
+       * wrapped, with nothing able to report it. This file has already paid for the other answer:
+       * the folded state's own comment below explains why measuring the header into a custom
+       * property was abandoned — the call that repaints the panel runs before the tabpanels are
+       * written, so it measured an empty header, 2px short, and clipped it. Wrapping the rows means
+       * the sticky element's height follows its content and no number has to be written down.
+       *
+       * `.inspector-chrome` is an ordinary block, and the panel is a scroll container, so a plain
+       * child scrolls away with its content — no bug required, that is the default. Measured with
+       * real records scrolled to their real bottom, counting the pixels still inside the panel's
+       * own scrollport: at 1366x768 the 212px of panel scroll took the locator line and the whole
+       * tab bar off the top (0/36 and 0/39 visible), the same at 1100x900 with 169px, and the same
+       * on the narrow layout at 897x900 with 329px. What was left was a table starting mid-way,
+       * with no title, no turn and no tabs. The loss scales with how far the panel can scroll, so
+       * a window that scrolls only 80px still reads as correct — which is why this rule's first
+       * version measured 12/12 green and the re-measurement 18/18 green over a defect still there.
+       *
+       * The rule used to sit inside the dock's own media query, and the reason it was scoped there
+       * has since stopped being true. That reason said: above 1080px the panel is not a scroll
+       * container and there is nothing to stick to. D40 gave the wide panel a ceiling and an inner
+       * scroller, so above 1080px the panel scrolls as well — and rows that scroll away there are
+       * the same loss, reached from the other side. So the rule is now unconditional, and what
+       * scopes it is the panel rather than a breakpoint.
+       *
+       * Scoped to this panel and to nothing else: a bare `.inspector-chrome`, or a bare
+       * `.panel-head`, would do the same to the ledger's header, which has no handle to lose but has
+       * a title that would stop being where the reader left it.
+       *
+       * Sticky to the panel's own scrollport, not the page's: the scroll container is the panel, so
+       * nothing here moves when the page does. Same shape as `.turn-head` in the ledger — sticky,
+       * z-index, an opaque background, and the borders it already had. */
+      #inspector-panel > .inspector-chrome {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--mcode-surface);
+      }
+
       .panel-head-meta {
         font-size: 12px;
         color: var(--mcode-text-muted);
+      }
+
+      /* The inspector's two window buttons, side by side, minimize first — the order every
+         window uses, so the pair reads without being told.
+
+         The wrapper exists so the head still has three flex children and not four: `.panel-head`
+         is `justify-content: space-between`, and a fourth child would put a gap between the
+         record id and the first button instead of one between the buttons and none between
+         those and their neighbours. It is also what keeps the pair together when the head
+         wraps at a narrow width — the id drops to a second line and the buttons stay as one
+         unit on the first. */
+      .panel-head-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        flex: none;
+      }
+
+      /* `.section-toggle` rotates its icon off `aria-expanded`, which is the right idiom for a
+         disclosure triangle and the wrong one for these two. The minimize button's glyph is a
+         dash and must never rotate; the expand button's glyph is written by applyInspectorDock()
+         to point the way its click goes, and a rotation on top of that would point it two ways
+         at once. Both opt out here rather than by dropping `aria-expanded`, which is the honest
+         signal and is what the guard reads. */
+      #inspector-minimize .icon,
+      #inspector-expand .icon {
+        transform: none;
+        transition: none;
       }
 
       /* ---------------- ledger ---------------- */
@@ -1140,13 +1433,99 @@
         padding: 8px 0 12px;
       }
 
+      /* The end-of-ledger sentinel. One pixel, no content, and never scrolled past deliberately —
+       * it exists so 「读者已经在最底下了」 can be a reading rather than a computation. An
+       * IntersectionObserver on it is the whole of the 「到最低 / 到最上」 state machine, which is
+       * why this control needed no scroll listener: the two scroll handlers on this page are
+       * already one-per-consumer, and a third that exists only to relabel a button would be a
+       * third reader of the same scroll position.
+       *
+       * It sits OUTSIDE #ledger on purpose. That element is cleared and rebuilt on every poll, so
+       * anything living inside it would need re-observing every build; here it is the panel's last
+       * child, its position follows the panel's height, and the observer is created once. */
+      .ledger-end {
+        height: 1px;
+      }
+
+      /* The two-ends jump: a round arrow pinned to the ledger's bottom edge and centred on it.
+       *
+       * Sticky on the panel rather than fixed on the viewport, and that is the whole design. The
+       * ledger is not a scroll container — `.ledger-body` has no overflow and `restoreRowAnchor()`
+       * moves `window`, not a box — so the ledger grows in the document flow and the page is the
+       * scroll axis. A fixed button would hover over the inspector for the entire session; sticky
+       * inside the panel rides the panel, which is what 「轨迹表格中间的下方」 means.
+       *
+       * `bottom` is a measured offset, and it is measured rather than derived because the thing it
+       * has to clear is a panel whose height the reader chooses by dragging, in three different
+       * states, on a screen narrow enough that the two share one column. `--inspector-bottom-reserve`
+       * is written by the one function that already owns that height (applyInspectorDock), so this
+       * rule never re-derives it and cannot disagree with what is on screen.
+       *
+       * Measured on a 22,527-message session at 897x900, sweeping every scroll position where the
+       * inspector is pinned: with a flat 12px the button sat at 853..888 against a panel at
+       * 540..900 — a 35px overlap at 12 of 18 stops, and because this button is z-index 6 over the
+       * panel's 5 it both covered the 「复制 JSON / 交接 AI」 row and took its clicks. Only the very
+       * last stop cleared, and only because the ledger's own bottom edge had by then passed above
+       * the panel: a single measurement there would have said there was no collision at all. */
+      .ledger-jump {
+        position: sticky;
+        bottom: calc(12px + var(--inspector-bottom-reserve, 0px));
+        z-index: 6;
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        margin: 0 auto;
+        padding: 0;
+        border: 1px solid var(--mcode-border);
+        border-radius: 50%;
+        background: var(--mcode-surface);
+        color: var(--mcode-text-muted);
+        cursor: pointer;
+        transition: color 150ms ease-out, background-color 150ms ease-out;
+      }
+
+      .ledger-jump:hover {
+        background: var(--mcode-surface-muted);
+        color: var(--mcode-text);
+      }
+
+      .ledger-jump:focus-visible {
+        outline: 2px solid var(--mcode-accent, currentColor);
+        outline-offset: 2px;
+      }
+
+      /* `display: grid` above would otherwise beat the `hidden` attribute, which is the same
+       * mistake the grip's `display: none` default runs into (see its own comment). */
+      .ledger-jump[hidden] {
+        display: none;
+      }
+
       .turn-group {
         display: block;
       }
 
+      /* Off-screen turn groups stop being laid out. Gated on a class the ledger owns rather than
+         being unconditional, because the first batch is what the height calibration is measured
+         from: those groups have to be laid out for real before anything can be told apart from a
+         guess. Pinned by tests/verify-intrinsic-size.mjs.
+
+         contain-intrinsic-size is NOT set here. One number for every group is the thing that was
+         measured and rejected — real heights span 11× across a session — so each group carries its
+         own on its inline style, computed from its own (rows, bands) once the three heights have
+         been calibrated off the real DOM. A written-down constant would be a guess at someone
+         else's font and zoom, which is the trade this file keeps refusing. */
+      .ledger-body.is-skipping-offscreen .turn-group {
+        content-visibility: auto;
+      }
+
       .turn-head {
         position: sticky;
-        top: 0;
+        /* Below every band above it, measured. It used to pin at 0 with z-index 2 and simply got
+           drawn over — its turn title and its kind summary landed on the type row's buttons and on
+           the overview's tick labels, and neither could be read. */
+        top: calc(var(--sticky-band-h, 32px) + var(--sticky-overview-h, 51px)
+          + var(--sticky-window-h, 45px));
         z-index: 2;
         display: flex;
         align-items: center;
@@ -1235,6 +1614,16 @@
          digits — the phone behaviour. */
       :root {
         --traj-index-col: 72px;
+        /* The docked height, as two fifths of the window. It was 50vh, then a quarter, and the
+           unit was never the problem — the unit being frozen was. The reader cannot make it
+           smaller, and a cap the reader cannot move is a number nobody chose. applyInspectorDock()
+           therefore writes this in px from window.innerHeight and a drag overwrites it, so the
+           declaration below is only what shows before the first measurement. It stays a vh for the
+           same reason as everywhere else here: 100vh is not the reader's height inside a host
+           iframe, and every offset on this page is measured for that reason. The 40 must track
+           INSPECTOR_DOCK_SHARE — the fallback and the measurement are the same promise written
+           twice, so a guard holds them together. */
+        --inspector-dock-h: 40vh;
       }
 
       .row-list {
@@ -1525,11 +1914,12 @@
 
       .window-bar {
         position: sticky;
-        /* Sticky offsets stack here: the type row owns 0–32 and the overview strip owns
-           32–83 (32 + the 50px plot + its 1px border), so a bar pinned at 0 would simply
-           hide behind both of them. z-index 3 keeps it under the overview (4) and over the
-           turn head (2). */
-        top: 83px;
+        /* Sticky offsets stack here, and every one of them below the filter band is measured
+           rather than written down: the band is the two filter rows (whose height changes when
+           异常 wraps or when its note appears) plus the overview strip. The old numbers — 0–32 and
+           32–83 — were correct for a layout where the 异常 row was not in the band, and they are
+           exactly the kind of constant that goes stale silently. syncStickyOffsets() owns them. */
+        top: calc(var(--sticky-band-h, 32px) + var(--sticky-overview-h, 51px));
         z-index: 3;
         padding: 8px 16px;
         background: var(--mcode-bg);
@@ -1844,6 +2234,23 @@
           max-width: none;
         }
 
+        /* Those two rules were written for the toolbar's fields, which are allowed to take a
+           whole line each. This select no longer lives there: it sits in a `flex: none` tail
+           inside a row that wraps, so `width: 100%` would size it against that tail and the
+           band would grow sideways rather than wrap. Written here rather than left to chance
+           because a rule that silently starts governing a second layer is the drift this file
+           keeps refusing: the override has to exist even though no browser here is narrow enough
+           to exercise it. tests/verify-cross-layer.mjs pins that a rule must not acquire a second
+           layer to govern. */
+        .filter-row-tail .field {
+          flex: none;
+        }
+
+        .filter-row-tail select {
+          width: auto;
+          max-width: min(320px, 70vw);
+        }
+
         /* All five columns stay so the 失败 text never disappears on narrow screens.
            The index column is deliberately left at its own width: it is the one track
            sized by data rather than by the text it holds, and the 28px this rule used
@@ -1859,6 +2266,230 @@
         .kv-table td {
           padding-left: 12px;
           padding-right: 12px;
+        }
+
+}
+
+      /* ---------------- the inspector, three states wherever it sits below the ledger -----------
+       *
+       * This is its own media query and the width is the whole point. `.columns` becomes one
+       * column at 1080px, and from there down the inspector is *below* the ledger instead of
+       * beside it — off screen until the reader scrolls to the very end of a ~90,000px
+       * document. Docking therefore has to cover that entire range.
+       *
+       * It used to start at 767px, which is *narrower* than the single-column breakpoint. That
+       * left a 767–1080px band in which the panel was both buried below the ledger and not
+       * docked to compensate — worse than either state on its own — and it happened to be
+       * the width the in-app browser actually sits at, so the feature read as absent rather
+       * than broken. Above 1080px the inspector is its own column and must not dock at all. */
+
+      @media (max-width: 1080px) {
+
+        /* Sticky needs travel, and this page turns out to have it without help: measured 7,300px
+           of room inside main.columns with no padding from here, because the virtualised ledger
+           makes the height above the panel an estimate and leaves the real box taller than the
+           scroll position believes. An earlier version of this rule added 50vh of padding to
+           create travel that was never needed — and that padding was the one thing standing
+           between the reader and the footer at the end of the document, which is the state
+           「滚到最底部恢复正常」 is about. So there is no travel class and no scroll
+           compensation. */
+
+        /* Flow is not pinned. That is the whole of D36, and it is a statement about where the panel
+           SITS, not about how tall it may be.
+
+           `position: sticky; bottom: 0` used to sit on this rule, so all four states carried it.
+           `bottom: 0` is a promise about height: it pins the element's BOTTOM edge to the
+           scrollport's bottom edge, which means 「stay reachable」 only while the element is
+           SHORTER than the scrollport. Taller than that, the browser slides it up by the
+           difference — it leaves its grid row in order to do it — and that grid row is exactly what
+           `flow` is supposed to mean. Measured 2026-10-13 at 897x858 with one record selected:
+           layout position document y=8329 (after the ledger, which is right) and rendered position
+           document y=858 — dragged 7471px up, and in FRONT of the ledger at 959 rather than after
+           it, covering it at every one of sixteen scroll stops. `covers` was true at all sixteen,
+           and at scrollY=0 the panel's top edge sat exactly on the fold with the whole ledger
+           below it: the report was 「滚到最上面，轨迹不见了」.
+
+           So sticky moves down to the three states that are actually pinned, and flow falls back
+           to `position: static`, which puts the panel back in its own grid row. Measured again at
+           the same sixteen stops: document y=8329 throughout, after the ledger, `covers` false
+           throughout.
+
+           The cap stays on this rule, because it is a property of every state and not of the
+           pinned ones. It is `--inspector-full-h`, the same number `is-inspector-full` uses,
+           because that is already `innerHeight - pinned strips - the ledger's reserved quarter`:
+           the panel can be neither taller than the window nor able to squeeze the rows. What
+           changed is the reason. It used to be 「a sticky-bottom element has nowhere legal to
+           sit」, which was true while sticky was here and is not true now; in flow this is an
+           ordinary static block. It is capped because the panel is the last thing in the
+           document, and a panel taller than the window is one the reader has to scroll past to
+           reach the end of the page. */
+        #inspector-panel {
+          max-height: var(--inspector-full-h, 70vh);
+          overflow-y: auto;
+        }
+
+        /* The pinned states, and only these three. That selector is what `position: sticky`
+           means on this page, so a state that should be pinned gets pinned by being named here and
+           a state that should not be pinned is not pinned by a default instead of a decision —
+           which is the mistake the old base rule was. */
+        #inspector-panel.is-inspector-docked,
+        #inspector-panel.is-inspector-full,
+        #inspector-panel.is-inspector-folded {
+          position: sticky;
+          bottom: 0;
+          z-index: 5;
+        }
+
+        /* Two fifths by default, and the reader can drag it. The content scrolls inside the
+           panel instead of the panel growing: a growing panel pushes its own handle out of the
+           viewport, which is the one thing a docked panel cannot do. The number itself is written
+           by applyInspectorDock() — a fifth of the measured window twice over, or whatever the reader
+           dragged to — so this rule only says what the cap is *called*.
+
+           `max-height`, never `height`, and that is the answer to 「窗口的高度和检视的高度取
+           最大还是最小」: a cap renders min(content, cap), so a record whose body is shorter
+           than the cap is shown at its own height instead of being padded out to a fifth of
+           the window. `height` would make the cap mandatory and put a blank band inside the
+           panel. It cannot show today — the shortest record measured 752px of content against a
+           400px cap, because the summary tab always renders its metadata table — which is
+           exactly why it is a rule worth writing down rather than a coincidence worth relying on. */
+        #inspector-panel.is-inspector-docked {
+          max-height: var(--inspector-dock-h);
+          overflow-y: auto;
+          border-top: 1px solid var(--mcode-border);
+          background: var(--mcode-surface);
+        }
+
+        /* Folded down to its own header. This is the third height the reader can pick, and it is
+           the one that was missing: `flow` and `docked`/`full` are three class values, but only two
+           of them are heights — flow is a *position* ("not pinned"), so the panel could go from two
+           fifths to fully expanded and had nowhere smaller to go.
+
+           Folded by taking the content out of flow rather than by capping the panel. The obvious
+           version is `max-height: <the header's own height>`, and that is the version this section
+           shipped first: it needs the header's height written into a custom property, which means
+           measuring it, which means deciding *when* to measure — and the call that repaints the
+           panel sits before the tabpanels are written, so it measured the empty header, 2px short of
+           the real one, and the header came out clipped. Measured after the fact it is right (this
+           machine: a 51px header under a 52px cap, the extra pixel being the panel's own border
+           inside a border-box) — but it is a number that has to be kept right, for nothing.
+
+           With everything but the header out of flow the panel's height *is* the header's height,
+           whatever that turns out to be. Nothing to write, nothing to cache, nothing to go stale,
+           and no way for the cap to disagree with the thing it is capping.
+
+           `display: none` rather than a clip, so the record is not laid out while it is folded away.
+           It stays selected and stays rendered — the reader folded it, they did not dismiss it, and
+           the handle in the header is the only way back — but nothing is measured for a box nobody
+           is looking at.
+           *
+           * Two selectors, and the second one exists only because of `.inspector-chrome`. Those rows
+           * are wrapped so they can be pinned as one unit, and a wrapper is precisely what this rule
+           * would otherwise hide: `:not(.inspector-chrome)` keeps the wrapper, and the second selector
+           * then takes out everything inside it that is not the header. Same shape one level in, so
+           * folded is still the header alone and the panel's height is still the header's height,
+           * whatever that turns out to be. Without that second half folded would stand 124px tall
+           * instead of 49px — a "collapsed" panel 2.5x its collapsed height, which is no longer a
+           * collapsed panel. */
+        #inspector-panel.is-inspector-folded > *:not(.inspector-chrome),
+        #inspector-panel.is-inspector-folded .inspector-chrome > *:not(.panel-head) {
+          display: none;
+        }
+
+        /* The grip, on the panel's top edge — which is the edge that moves when the panel is
+           pinned to the bottom, so dragging it up makes the panel taller.
+
+           `touch-action: none` is not decoration: without it a vertical drag that starts on this
+           strip is a page scroll, and on a touch screen the reader cannot resize at all. The strip
+           is 14px tall and sits half above the panel's own border so the visible hairline and the
+           grabbable area are the same thing. It is off unless the panel is pinned — in flow there
+           is no height to decide, and a grip that does nothing is worse than no grip.
+
+           The off state is CSS's, not script's: `display: none` here does not depend on whether the
+           attribute has been written yet. Which makes the rule below load-bearing rather than
+           decorative — without it this `display: none` is final, `hidden` loses to it whatever the
+           script says, and the grip keeps a 0x0 box no matter how correctly the state is decided. */
+        #inspector-panel .inspector-resize {
+          display: none;
+          /* Sticky to the PANEL's own scrollport, not the page's — the panel is the scroll
+             container, so `top` is measured against it. This used to be `position: absolute`,
+             which put the strip in the flow's coordinate system but not the flow itself: inside a
+             scrolling box an absolutely positioned child travels WITH the content, so the grip
+             left the scrollport on the first scroll and there was nothing left to grab. Measured
+             2026-10-13 at 900x780: at scrollTop 174 the grip's overlap with the panel was already
+             0px, and at 697 it sat 235px above the panel entirely.
+
+             `left`/`right` went with it. They never applied — a block-level box in flow sizes
+             itself — and keeping them would read as "this is how wide it is" when it is not. */
+          position: sticky;
+          top: -7px;
+          height: 14px;
+          /* Sticky puts the strip back IN the flow, which costs 14px the panel did not used to
+             pay. Take exactly that back, so the panel's internal layout — and its scrollHeight,
+             which is what a reader scrolls to the end of — is unchanged. The same number as
+             `height`, and it has to stay that number: a strip taller than its own negative margin
+             pushes the chrome down by the difference, and a shorter one leaves a seam. */
+          margin-bottom: -14px;
+          cursor: ns-resize;
+          touch-action: none;
+          /* Above `.inspector-chrome` (z-index 2), and this is not cosmetic — it is the second of
+             two reasons the grip was unusable, and the one that survived scrollTop 0. The chrome is
+             sticky at the panel's top edge with an opaque background, and the strip lives on that
+             same edge: of the 8px where the two overlapped, 45 of 45 sampled points hit the header
+             and none hit the grip. So the reader could not drag the panel taller on ANY scroll
+             position, not only after scrolling. Same family as D27 (a `display: none` that put the
+             grip outside the hit tree): every assertion checked that a property appeared in some
+             rule, and none asked whether a later sibling could cover the result. */
+          z-index: 3;
+        }
+
+        /* The one thing that turns the grip on, and the only one. `hidden` is written by
+           applyInspectorDock() and by nothing else, so this selector is the whole switch: the
+           default is off, and the single way to reach on is for that one writer to stop hiding it.
+
+           D27: this rule did not exist, and the reader could not resize on any screen at any width.
+           The state was right and the geometry was right and four pointer listeners were attached;
+           the strip simply never entered the hit tree. Every guard passed, because each of them
+           asserted that some property appeared in some rule — and no assertion asked whether any
+           rule could undo the one that kept it invisible. */
+        #inspector-panel .inspector-resize:not([hidden]) {
+          display: block;
+        }
+
+        #inspector-panel .inspector-resize::after {
+          content: '';
+          position: absolute;
+          left: 50%;
+          top: 5px;
+          width: 44px;
+          height: 3px;
+          margin-left: -22px;
+          border-radius: 2px;
+          background: var(--mcode-border);
+        }
+
+        #inspector-panel .inspector-resize:hover::after,
+        #inspector-panel .inspector-resize:focus-visible::after {
+          background: var(--mcode-accent, currentColor);
+        }
+
+        /* Fully expanded: the panel is pinned and takes the whole viewport the pinned strips above
+           it are not using. Both numbers are measured by syncStickyOffsets() and written by
+           applyInspectorDock() rather than computed from 100vh: this page runs inside a host
+           iframe, where 100vh is not the height the reader can see, which is why client-check
+           bans it and why every other offset here is measured. The vh fallbacks are what shows
+           before the first measurement, not what ships.
+
+           This used to say 「the cap comes off」, and D32 is why that stopped being true: the cap
+           has to stay on for the cap to be the thing that keeps a sticky-bottom panel shorter than
+           the scrollport. Expanding and sitting in the document are now the same *height* at two
+           different *positions* — pinned to the viewport bottom, or at the end of the document —
+           which is what the handle was buying in the first place. The rule is kept so the state
+           still has a name in the stylesheet, and verify-inspector-dock.mjs asserts that the two
+           declarations stay identical rather than drifting apart. */
+        #inspector-panel.is-inspector-full {
+          max-height: var(--inspector-full-h, 70vh);
+          overflow-y: auto;
         }
       }
 
@@ -1943,18 +2574,14 @@
             <label class="field-label" for="session-select">会话</label>
             <select id="session-select" aria-describedby="window-count"></select>
           </div>
-          <div class="field" id="generation-field" hidden>
-            <label class="field-label" for="generation-select">上下文代</label>
-            <select id="generation-select" aria-describedby="generation-hint"></select>
-          </div>
-          <div class="field field-grow">
+          <div class="field field-grow" data-filter-scope>
             <label class="field-label" for="search-input">搜索</label>
             <input type="search" id="search-input" placeholder="搜索摘要、正文、结果与思考" autocomplete="off" />
           </div>
         </div>
 
         <div class="toolbar-row">
-          <div class="field field-range" role="group" aria-labelledby="range-label" aria-describedby="range-hint">
+          <div class="field field-range" role="group" aria-labelledby="range-label" aria-describedby="range-hint" data-filter-scope>
             <span class="field-label" id="range-label">时间区间</span>
             <label class="range-part" for="range-from">
               <span class="range-part-label">起点</span>
@@ -1980,18 +2607,7 @@
             <button type="button" class="btn btn-quiet" id="range-clear" aria-label="清空时间区间" hidden>清空区间</button>
           </div>
         </div>
-        <p class="range-hint" id="range-hint">留空 = 不限。选一个时间区间，或用快捷按钮。</p>
-
-        <div class="toolbar-row">
-          <div class="field field-anomaly" role="group" aria-labelledby="anomaly-label">
-            <span class="field-label" id="anomaly-label">异常</span>
-            <!-- The buttons are built from ANOMALY_RULES rather than written here. The rule
-                 table is the one place a rule is named, so a rename cannot leave a button
-                 showing one word and announcing another, and a new rule is an entry in that
-                 table instead of a second list to keep in step. -->
-            <div class="anomaly-quick" id="anomaly-controls" role="group" aria-label="只看异常记录"></div>
-          </div>
-        </div>
+        <p class="range-hint" id="range-hint" data-filter-scope>留空 = 不限。选一个时间区间，或用快捷按钮。</p>
 
       </form>
 
@@ -2008,7 +2624,9 @@
         <div class="kpi-grid" id="kpi-grid"></div>
       </section>
 
-      <div class="traj-controls" id="kind-controls" role="toolbar" aria-label="按类型筛选轨迹" aria-controls="overview">
+      <div class="filter-sticky" id="filter-sticky">
+        <div class="filter-row">
+        <div class="traj-controls" id="kind-controls" role="toolbar" aria-label="按类型筛选轨迹" aria-controls="overview" data-filter-scope>
         <nav class="traj-controls-actions" aria-label="按类型筛选轨迹">
           <button type="button" class="tbtn tbtn-action tbtn-all" id="kind-all" aria-pressed="true"
             aria-label="当前显示全部类型 · 点击只看空白" title="当前显示全部类型 · 点击只看空白">
@@ -2061,6 +2679,62 @@
             </button>
         </nav>
         </div>
+        <!-- Unmarked on purpose, and the reason is already written where the mechanism is, in the
+             `body[data-anomaly-mode='on'] [data-filter-scope]` rule above: syncAnomalyMode() sets
+             `inert` on everything carrying the attribute, so marking this one would grey the
+             picker out and take it out of the tab order at exactly the moment a reader reading a
+             list of failures most wants to switch generation. It chooses which session is on
+             screen, not which records, so it is not one of the controls a rule suspends.
+
+             The label is sr-only rather than dropped, and that is a measured decision rather than
+             a taste one: at 845px the type row leaves 176px and the picker itself measures 141px
+             once it is sized like the chips, so a visible 「上下文代」 (48px of text plus an 8px
+             gap) is exactly what pushes it off the row. The accessible name is the whole point
+             of a <label>; its pixels are not. -->
+        <div class="filter-row-tail" id="filter-row-tail">
+          <div class="field" id="generation-field" hidden>
+            <label class="field-label sr-only" for="generation-select">上下文代</label>
+            <select id="generation-select" aria-describedby="generation-hint"></select>
+          </div>
+        </div>
+        </div>
+
+        <!-- 异常 is a second filter system, not a fourth field of the first one, and it is said
+             so here rather than implied: while a rule is on, the kind axis, the search box and
+             the time range stop applying, and the controls that drive them are dimmed so that
+             a control that cannot change what is on screen does not still look like it can.
+             It sits directly under the kind axis because the two decide the same thing — which
+             records the ledger shows — and separated by the KPI cards it read as unrelated.
+             The buttons are built from ANOMALY_RULES rather than written here: the rule table
+             is the one place a rule is named, so a rename cannot leave a button showing one
+             word and announcing another, and a new rule is an entry in that table instead of a
+             second list to keep in step. -->
+        <div class="anomaly-bar" id="anomaly-bar">
+          <span class="anomaly-bar-label" id="anomaly-label">异常</span>
+          <!-- Single by default, because 「点什么就显示什么」 is the promise and a button that
+               adds to the selection breaks it: you ask for tool failures and get them plus
+               whatever was already on. The checkbox is how you ask for the union instead — it
+               is a mode switch, not a filter, which is why it sits outside the button group
+               rather than being one more rule. -->
+          <label class="anomaly-multi" for="anomaly-multi">
+            <input type="checkbox" id="anomaly-multi" />
+            <span>多选</span>
+          </label>
+          <div class="anomaly-quick" id="anomaly-controls" role="group" aria-labelledby="anomaly-label"></div>
+          <span class="anomaly-bar-note" id="anomaly-mode-note" hidden></span>
+        </div>
+
+        <!-- The banner travels with the picker, and that is the whole argument for moving it.
+             It only exists while a generation is pinned, which is precisely when a reader who
+             has scrolled thousands of pixels into a frozen pre-compaction snapshot is most
+             likely to have forgotten they are looking at one. Left at the top of the ledger
+             panel, it would scroll away from the control that caused it while that control
+             stayed pinned — the warning and the thing being warned about on opposite sides of
+             a scroll boundary. Its text and its source (statsAll()) are untouched; only where
+             it is pinned changed. syncStickyOffsets() reads the band's real height, so the line
+             appearing and disappearing re-measures everything pinned below it (D9). -->
+        <p class="generation-note" id="generation-hint" hidden></p>
+      </div>
 
       <section class="overview" id="overview" aria-labelledby="overview-heading">
         <h2 class="sr-only" id="overview-heading">轨迹总览</h2>
@@ -2089,18 +2763,51 @@
             <h2 class="section-title" id="ledger-heading">轨迹</h2>
             <span class="panel-head-meta" id="ledger-meta"></span>
           </div>
-          <p class="generation-note" id="generation-hint" hidden></p>
           <div class="window-bar" id="window-bar" aria-label="列表视图控制"></div>
           <div class="ledger-body" id="ledger"></div>
+          <!-- D44: the two ends of the ledger, and the one reading that says which end the reader is
+               at. See `.ledger-end` and `.ledger-jump` for why the sentinel is outside #ledger. -->
+          <div class="ledger-end" id="ledger-end" aria-hidden="true"></div>
+          <!-- No text and no glyph in the markup: buildLedgerJump() fills the arrow in, and the
+               button starts hidden so the first paint is never an empty circle. The label for a
+               reader of assistive tech lives in aria-label, which setLedgerJumpLabel() rewrites
+               with the arrow. -->
+          <button type="button" class="ledger-jump" id="ledger-jump" hidden aria-label="跳到轨迹的最低"></button>
         </section>
 
-        <section class="panel" aria-labelledby="inspector-heading">
-          <div class="panel-head">
-            <h2 class="section-title" id="inspector-heading">检视</h2>
-            <span class="panel-head-meta" id="inspector-meta"></span>
+        <section class="panel" id="inspector-panel" aria-labelledby="inspector-heading">
+          <div class="inspector-resize" id="inspector-resize" role="separator" aria-orientation="horizontal" aria-label="拖动调整检视高度" tabindex="-1"></div>
+          <div class="inspector-chrome">
+            <div class="panel-head">
+              <h2 class="section-title" id="inspector-heading">检视</h2>
+              <span class="panel-head-meta" id="inspector-meta"></span>
+              <!-- Two buttons, one job each, in the order a window uses them. D38 replaced a single
+                 button that cycled folded -> half -> expanded -> folded: it worked, and reaching
+                 「半高」 from 「完全展开」 still took two clicks and from 「折叠」 took one, so the
+                 control's contract was a sequence rather than a height. Each of these states what
+                 its click does instead, and neither one writes the dock state — they hand a named
+                 target to setInspectorDock(), which is the only writer.
+
+                 Both ship hidden: nothing is pinned until the reader selects a record on a narrow
+                 screen, and in flow there is no height to change and no reason to offer to. The
+                 minimize button has no aria-expanded on purpose — the dash is the glyph, and the
+                 attribute would make `.section-toggle` rotate it. -->
+            <div class="panel-head-actions">
+              <button type="button" class="section-toggle" id="inspector-expand" aria-expanded="false" aria-controls="panels" aria-label="完全展开检视" title="完全展开检视" hidden>
+                <svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path id="inspector-expand-icon" d="M4 6.5 8 10.5 12 6.5" />
+                </svg>
+              </button>
+              <button type="button" class="section-toggle" id="inspector-minimize" aria-controls="panels" aria-label="折叠到最小" title="折叠到最小" hidden>
+                <svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path id="inspector-minimize-icon" d="M3.5 8 H12.5" />
+                </svg>
+              </button>
+            </div>
+            </div>
+            <p class="inspector-locator" id="inspector-locator">尚未选择记录</p>
+            <div class="tablist" id="tablist" role="tablist" aria-label="记录详情视图"></div>
           </div>
-          <p class="inspector-locator" id="inspector-locator">尚未选择记录</p>
-          <div class="tablist" id="tablist" role="tablist" aria-label="记录详情视图"></div>
           <div id="panels">
             <div class="tabpanel" role="tabpanel" id="panel-summary" tabindex="0" aria-labelledby="tab-summary"></div>
           </div>
@@ -2158,9 +2865,15 @@
       // would invite reading the two as one category.
       var KIND_ORDER = ['user', 'steer', 'reply', 'narration', 'thinking', 'toolCall', 'toolResult', 'system', 'compaction'];
 
-      // The type chips are the only filter. Which record kinds are visible is one array —
-      // state.kinds — and every control that changes it writes to that array and nowhere
-      // else, so a question about "what am I looking at" has exactly one answer.
+      // Which record kinds are visible is one array — `state.kinds` — and every control that
+      // changes it writes to that array and nowhere else, so a question about "what am I
+      // looking at" has exactly one answer.
+      //
+      // That is a claim about kinds, and only about kinds. Three other conditions narrow the
+      // table too: 异常 replaces this axis outright while a rule is ticked, a range bounds the
+      // session to a stretch of wall-clock time, and a brush bounds it to a stretch of the
+      // overview. Two comments in this file used to claim exclusivity for this axis with no
+      // qualifier; each of them was describing an earlier page.
       //
       // There is deliberately no second row of layer buttons. Three fixed presets looked
       // like a coarser version of the chips, but any preset the reader outgrows became a
@@ -2239,6 +2952,23 @@
           record: function (record) {
             return !!record && record.kind === 'reply' && isNil(record.text);
           }
+        },
+        {
+          id: 'hostOnly',
+          label: '内部记账',
+          // A record the runtime writes for itself: it goes into the session, and the runtime
+          // filters it out of the request it sends to the model, but it carries no content — so
+          // on this page it is a blank row sitting after the reply it belongs to.
+          //
+          // Judged on the flag the server derived from the same `hostMetadata.providerVisibility`
+          // the runtime itself filters on, not on a customType name. A name list goes stale the
+          // first time the runtime adds another host-only record type; the flag arrives flagged.
+          //
+          // It is here rather than hidden because being able to select exactly these rows is how
+          // you answer 「这行空白是什么」 without leaving the page.
+          record: function (record) {
+            return !!record && record.internalOnly === true;
+          }
         }
       ];
 
@@ -2246,11 +2976,23 @@
         return rule.id;
       });
 
-      function anomalyRuleLabel(id) {
+      // Not a rule, so it has no id and no entry in the table: it is the state where no rule
+      // applies and the row above is in charge again. 重置, not 反选 — nothing is being inverted
+      // here, the row is being put back the way it was on arrival. Named here rather than in the
+      // markup so the bar cannot end up offering a way back that the handler and the note
+      // disagree with.
+      var ANOMALY_NONE_LABEL = '重置';
+
+      function anomalyRuleById(id) {
         for (var i = 0; i < ANOMALY_RULES.length; i += 1) {
-          if (ANOMALY_RULES[i].id === id) return ANOMALY_RULES[i].label;
+          if (ANOMALY_RULES[i].id === id) return ANOMALY_RULES[i];
         }
-        return id || DASH;
+        return null;
+      }
+
+      function anomalyRuleLabel(id) {
+        var rule = anomalyRuleById(id);
+        return rule ? rule.label : (id || DASH);
       }
 
       /**
@@ -2721,7 +3463,7 @@
         return { text: text.slice(0, cap), truncated: true };
       }
 
-      function buildHandoffMarkdown(session, turn, record, rawText, rawTruncated) {
+      function buildHandoffMarkdown(session, turn, record, rawText, rawTruncated, rawOmitted) {
         var lines = [];
         lines.push('请分析这条会话轨迹记录，说明它在做什么、有没有问题，以及是否需要改进。');
         lines.push('');
@@ -2754,7 +3496,7 @@
         if (record.api) lines.push('- 接口：' + record.api);
         if (record.stopReason) lines.push('- 结束原因：' + record.stopReason);
         if (record.textTruncated) lines.push('- 提示：正文已被上游截断。');
-        if (record.rawOmitted) lines.push('- 提示：原文过大已被省略。');
+        if (rawOmitted) lines.push('- 提示：原文过大已被省略。');
         if (record.isError || record.error) {
           lines.push('- 状态：失败');
           lines.push('- 错误：' + safeText(record.error));
@@ -2849,7 +3591,11 @@
       var ICON_PATHS = {
         chevronDown: ['M4 6.2 8 10.2 12 6.2'],
         copy: ['M5.6 5.6h7.8v7.8H5.6z', 'M2.6 2.6h7.8v7.8'],
-        arrowRight: ['M2.6 8h9.2', 'M8.6 4.6 12 8l-3.4 3.4', 'M13.4 2.6v10.8']
+        arrowRight: ['M2.6 8h9.2', 'M8.6 4.6 12 8l-3.4 3.4', 'M13.4 2.6v10.8'],
+        // D44: the ledger's two-ends jump. A shaft and a head, mirrored about the 8px centre, so the
+        // two directions cannot drift apart the way two separately-drawn glyphs would.
+        arrowDown: ['M8 2.8v10.4', 'M4.6 9.6 8 13l3.4-3.4'],
+        arrowUp: ['M8 13.2V2.8', 'M4.6 6.4 8 3l3.4 3.4']
       };
 
       function icon(name) {
@@ -2940,6 +3686,22 @@
         // up room. Folding them hands the height back to the ledger.
         filtersCollapsed: false,
         kpiCollapsed: false,
+        // Where the inspector is, on a narrow screen only. 'flow' is its ordinary place in the
+        // document, below the ledger; 'docked' is pinned to the bottom at half height; 'full' is
+        // pinned and uncapped. Wide screens never leave 'flow' — in two columns the panel is
+        // beside the ledger, so there is nothing to dock away from.
+        inspectorDock: 'flow',
+        // Which pinned height the panel was at on the way INTO folded, so the minimize button can put
+        // it back where the reader left it rather than always at half. Read only while folded, and
+        // written only on the way into folded — see setInspectorDock(). That one property is why it
+        // can never be stale: outside the folded state nothing looks at it, so there is no window in
+        // which the dock has moved on and the memory has not.
+        inspectorDockBeforeFold: 'docked',
+        // The docked height in px, once the reader has dragged it. null means "they have not", and
+        // the quarter-window default applies. A separate field rather than an extra mode on
+        // inspectorDock because it survives the state leaving the dock: coming back to the panel
+        // later should not silently forget the height the reader just chose.
+        inspectorDockH: null,
         // Duration button. Off = every record gets an equal slice on the overview and
         // recorded timing is ignored; on = recorded start/duration with idle gaps
         // compressed away. Persisted, because it is a reading preference, not data.
@@ -2948,8 +3710,7 @@
         overviewSelection: null,
         overviewViewport: null,
         overviewHoverId: null,
-        // The type chips are the only filter, so this array is the only definition of what is on
-        // screen. Unchecking a kind means its records are simply not part of the render
+        // Unchecking a kind means its records are simply not part of the render
         // plan — no placeholder row, no "已折叠 N 行 · 点击展开", nothing standing in for
         // what is gone. The reference implementation folds with a summary line instead;
         // this deliberately does not, because a line that claims to be a summary is one
@@ -2958,18 +3719,34 @@
         kinds: KIND_ORDER.slice(),
         // Which 异常 rules are ticked. Empty means the filter is off — not 「nothing matches」,
         // which is the distinction that keeps a turned-off filter from blanking the ledger.
-        // Kept as a list of rule ids rather than a boolean so a later rule is one more entry
-        // here and one more button, not a second piece of state that has to agree with this.
-        anomalyRules: [],
+        // The anomaly axis is one thing, so it is one field. Three top-level fields meant that
+        // 「no rule is on」 had to be re-derived from three places, and that turning one of them
+        // off without the other two read as a different state rather than as a bug: the
+        // coordination could only live in call order, because there was no shared model for it to
+        // live in. tests/verify-anomaly-model.mjs pins that shape.
+        anomaly: {
+          // 'single' or 'multi'. Single by default: a plain click answers 「点什么就显示什么」,
+          // and adding to what is already ticked breaks that. In 'multi' the buttons union. It
+          // is a mode and not a rule, so it lives beside `rules` rather than inside it.
+          mode: 'single',
+          // A list of rule ids rather than a boolean, so a later rule is one more entry here and
+          // one more button, not a second piece of state that has to agree with this.
+          rules: [],
+          // The rule the reader ticked last. Only used when 多选 is switched off while several
+          // rules are standing: one of them has to survive, and the one they were last looking
+          // at is the one they meant.
+          last: null
+        },
         query: '',
         // Time range, in milliseconds since the session started — the same zero the ledger's
         // `+893 分 21 秒` column counts from. `null` on either side means that end is open,
         // and both null is the default: no range, whole session.
         //
-        // This is the one filter the KPI follows. The type chips and the search box narrow
-        // what is *drawn*; a range answers a different question — "what happened in this
-        // stretch" — and a headline count for the whole session beside a table of the range
-        // is the mismatch this state exists to remove.
+        // Of everything on this layer, the KPI follows the range and nothing else. The type
+        // axis, the search box and the 异常 axis narrow what is *drawn* — and while 异常 is on,
+        // recordVisible() consults none of them — while a range answers a different question,
+        // "what happened in this stretch", and a headline count for the whole session beside
+        // a table of the range is the mismatch this state exists to remove.
         rangeFrom: null,
         rangeTo: null,
         // The highest record index in force when the range was set. An open-ended range is
@@ -3004,6 +3781,13 @@
         // unchanged session costs a 304 with no body instead of a multi-megabyte reply.
         etag: '',
         etagFor: '',
+        // Cursor for `?since=`: the highest record index already on screen, so a poll that
+        // finds new records transfers the tail instead of the session. Bound to a cache key
+        // for the same reason the validator is — a cursor means nothing against a different
+        // session or a different slice of a rotated one, so a mismatch has to drop it rather
+        // than ask for a tail from a payload this copy was never part of.
+        since: 0,
+        sinceFor: '',
         // null = follow whatever generation the runtime considers active. A number pins the
         // ledger to one slice of a rotated history so pre-compaction turns stay reachable.
         generation: null
@@ -3028,6 +3812,7 @@
         dom.staleBar = document.getElementById('stale-bar');
         dom.toolbar = document.getElementById('toolbar');
         dom.kindControls = document.getElementById('kind-controls');
+        dom.filterSticky = document.getElementById('filter-sticky');
         dom.sessionSelect = document.getElementById('session-select');
         dom.generationField = document.getElementById('generation-field');
         dom.generationSelect = document.getElementById('generation-select');
@@ -3040,7 +3825,10 @@
         dom.rangeQuick = document.querySelector('.range-quick');
         dom.rangeHint = document.getElementById('range-hint');
         dom.anomalyControls = document.getElementById('anomaly-controls');
+        dom.anomalyNote = document.getElementById('anomaly-mode-note');
+        dom.anomalyMulti = document.getElementById('anomaly-multi');
         dom.windowBar = document.getElementById('window-bar');
+        dom.overview = document.getElementById('overview');
         dom.headerToggle = document.getElementById('header-toggle');
         dom.kpiToggle = document.getElementById('kpi-toggle');
         dom.kpiGrid = document.getElementById('kpi-grid');
@@ -3054,6 +3842,8 @@
         dom.overviewTip = document.getElementById('overview-tip');
         dom.overviewClear = document.getElementById('overview-clear');
         dom.ledger = document.getElementById('ledger');
+        dom.ledgerEnd = document.getElementById('ledger-end');
+        dom.ledgerJump = document.getElementById('ledger-jump');
         dom.ledgerMeta = document.getElementById('ledger-meta');
         dom.inspectorMeta = document.getElementById('inspector-meta');
         dom.inspectorLocator = document.getElementById('inspector-locator');
@@ -3062,6 +3852,12 @@
         dom.copyBtn = document.getElementById('copy-btn');
         dom.handoffBtn = document.getElementById('handoff-btn');
         dom.inspectorStatus = document.getElementById('inspector-status');
+        dom.inspectorPanel = document.getElementById('inspector-panel');
+        dom.inspectorMinimize = document.getElementById('inspector-minimize');
+        dom.inspectorExpand = document.getElementById('inspector-expand');
+        dom.inspectorExpandIcon = document.getElementById('inspector-expand-icon');
+        dom.inspectorMinimizeIcon = document.getElementById('inspector-minimize-icon');
+        dom.inspectorResize = document.getElementById('inspector-resize');
         dom.footerTruncated = document.getElementById('footer-truncated');
         dom.footerBinding = document.getElementById('footer-binding');
       }
@@ -3139,15 +3935,24 @@
         // two generations is two different bodies, and reusing a validator across them would
         // let one silently satisfy the other with a 304.
         var genKey = state.generation === null ? 'auto' : String(state.generation);
-        var url = '/api/trajectory?session=' + session
-          + (state.generation === null ? '' : '&generation=' + encodeURIComponent(String(state.generation)));
         var cacheKey = session + '#' + genKey;
+        var url = '/api/trajectory?session=' + session
+          + (state.generation === null ? '' : '&generation=' + encodeURIComponent(String(state.generation)))
+          // Only ever asked alongside the validator below. A page that has a cursor for this
+          // key sends it and its If-None-Match together, so the unchanged case is still a 304
+          // and the delta only ever arrives when the session really did grow. A manual refresh
+          // drops the cursor as well as the validator: it is asking for the truth from the
+          // server, and a tail is not that.
+          + (!manual && state.sinceFor === cacheKey && state.since > 0
+            ? '&since=' + encodeURIComponent(String(state.since)) : '');
         var headers = { Accept: 'application/json' };
         // A manual refresh must always reach the server: drop the validator so the
         // response cannot be revalidated into a 304 the user did not ask for.
         if (manual) {
           state.etag = '';
           state.etagFor = '';
+          state.since = 0;
+          state.sinceFor = '';
         } else if (state.etag && state.etagFor === cacheKey) {
           headers['If-None-Match'] = state.etag;
         }
@@ -3205,7 +4010,126 @@
           });
       }
 
-      function applyPayload(payload, manual) {
+      /**
+       * The highest record index in a payload, which is the cursor the next poll sends.
+       *
+       * `record.index` rather than anything else: it is dense from 1, it only ever grows (a
+       * generation switch starts a new payload rather than renumbering this one), and it is
+       * already the public key `/raw?index=` answers on.
+       */
+      function payloadCursor(payload) {
+        var turns = payload && Array.isArray(payload.turns) ? payload.turns : [];
+        var max = 0;
+        for (var i = 0; i < turns.length; i += 1) {
+          var records = Array.isArray(turns[i].records) ? turns[i].records : [];
+          for (var j = 0; j < records.length; j += 1) {
+            if (typeof records[j].index === 'number' && records[j].index > max) max = records[j].index;
+          }
+        }
+        return max;
+      }
+
+      /**
+       * One turn's records plus whatever the incoming copy says about the turn itself.
+       *
+       * The turn-level fields are taken from the incoming copy rather than kept, because
+       * `closed` flips as the conversation moves on and the old copy still says `false`. The
+       * records are unioned by index rather than appended, so a delta replayed against a
+       * copy that already has it changes nothing instead of doubling a turn.
+       */
+      /**
+       * One turn's records plus whatever the incoming copy says about the turn itself.
+       *
+       * The turn-level fields are taken from the incoming copy rather than kept, because
+       * `closed` flips as the conversation moves on and the old copy still says `false`. The
+       * records are merged by index, and a record the page already has is **replaced** rather
+       * than skipped.
+       *
+       * Replacing is the whole point, and it is the second of two causes. A tool call's
+       * `durationMs` and its 「→ 结果预览」 are written onto the record after it was first
+       * pushed, when the result message arrives — so the copy that carries a new value is an old
+       * record with an index the page has already seen. This used to read
+       *
+       *     if (seen[added[i].index]) continue;
+       *
+       * which is a correct way to keep a delta from doubling a turn and an incorrect way to
+       * merge one: a delta replayed against a copy that already has a record must leave it
+       * unchanged, and it must also be allowed to *change* it. Those are different requirements
+       * and one line cannot serve both. Running it — old record with `durationMs: null`, incoming
+       * copy with 1533 — left the reader looking at a call row with no time on it until they
+       * refreshed.
+       *
+       * Replacing is safe against the doubling this line used to prevent, because the incoming
+       * copy is keyed by the same index: laying the same delta down twice replaces a record with
+       * the identical object rather than adding a second one. `verify-incremental.mjs` asserts
+       * that replay is a fixed point.
+       *
+       * @param {any} existing
+       * @param {any} incoming
+       * @returns {any}
+       */
+      function mergeTurnRecords(existing, incoming) {
+        var records = [];
+        var at = {};
+        var i;
+        var kept = Array.isArray(existing.records) ? existing.records : [];
+        for (i = 0; i < kept.length; i += 1) {
+          at[kept[i].index] = records.length;
+          records.push(kept[i]);
+        }
+        var added = Array.isArray(incoming.records) ? incoming.records : [];
+        for (i = 0; i < added.length; i += 1) {
+          var index = added[i].index;
+          if (at[index] === undefined) {
+            at[index] = records.length;
+            records.push(added[i]);
+          } else {
+            records[at[index]] = added[i];
+          }
+        }
+        records.sort(function (a, b) { return a.index - b.index; });
+        var merged = {};
+        for (var key in incoming) {
+          if (Object.prototype.hasOwnProperty.call(incoming, key)) merged[key] = incoming[key];
+        }
+        merged.records = records;
+        return merged;
+      }
+
+      /**
+       * A delta laid onto the payload already in hand, producing a whole payload again.
+       *
+       * The tail can start in the middle of a turn, so its turns are merged into the turns
+       * already here rather than appended after them — appending would show one turn twice
+       * and split 无答复, which counts turns, across two of them.
+       */
+      function mergeDelta(previous, delta) {
+        var turns = previous && Array.isArray(previous.turns) ? previous.turns.slice() : [];
+        var at = {};
+        var i;
+        for (i = 0; i < turns.length; i += 1) {
+          if (turns[i] && turns[i].id !== undefined) at[turns[i].id] = i;
+        }
+        var tail = Array.isArray(delta.turns) ? delta.turns : [];
+        for (i = 0; i < tail.length; i += 1) {
+          var incoming = tail[i];
+          if (!incoming || incoming.id === undefined) continue;
+          if (at[incoming.id] === undefined) {
+            at[incoming.id] = turns.length;
+            turns.push(incoming);
+          } else {
+            turns[at[incoming.id]] = mergeTurnRecords(turns[at[incoming.id]], incoming);
+          }
+        }
+        // `session` and `stats` arrive whole in every delta, so they replace rather than merge.
+        return { session: delta.session, stats: delta.stats, turns: turns };
+      }
+
+      function applyPayload(body, manual) {
+        // A delta is only ever laid onto a payload this page actually has. Without one —
+        // first load, a session switch, a manual refresh — the whole payload is the answer.
+        var mergeable = body && body.delta && state.payload && Array.isArray(state.payload.turns);
+        var payload = mergeable ? mergeDelta(state.payload, body) : body;
         var next = signatureOf(payload);
         var changed = next !== state.signature;
         state.payload = payload;
@@ -3214,6 +4138,10 @@
         state.hardError = null;
         state.stale = false;
         state.flat = flattenTurns(payload.turns);
+        // The cursor is the server's own word for how far it got, so a delta is O(1) here and
+        // only a whole payload has to walk the records to find the end of them.
+        state.since = mergeable ? body.delta.upTo : payloadCursor(payload);
+        state.sinceFor = state.etagFor;
         // The overview reaches the filter holding a bare record, but 无答复 is a property of
         // the turn the record sits in, so the owning turn has to be reachable from the
         // record alone. Built here rather than searched per call: this runs on every poll.
@@ -3223,10 +4151,11 @@
           if (payloadTurns[t] && payloadTurns[t].id) turnById.set(payloadTurns[t].id, payloadTurns[t]);
         }
 
-        if (changed) {
-          rePinWindow();
-          revealSelection();
-        }
+        // Only the window is re-decided here. Whether the selected record is still in the table is
+        // settled inside renderLedger(), which is the one exit every path that changes what the
+        // table shows goes through; answering the question here as well would give the field two
+        // writers, and the poll path is the one that used to leave it stale.
+        if (changed) rePinWindow();
         render();
         if (manual) announce('已刷新，正在显示最新数据。');
       }
@@ -3254,10 +4183,21 @@
 
       /* ---------------- rendering: session select ---------------- */
 
+      /* The count is omitted whole when there is none, rather than printed as a dash.
+       *
+       * `/api/sessions` reads the first 64 KB of the active `messages.jsonl` to build this list, so
+       * it used to send a message count that was really 「how many messages are in the first 64 KB」.
+       * On a session whose active file is 1 MB that is 10 against 23,642 — and this line put it in
+       * front of the reader as `（3 分钟前 · 10 条）`, with nothing to say it was a prefix. It now
+       * sends no count when the prefix was not the whole file, so `— 条` here would be printing the
+       * absence of a number in the shape of a number. Omitting the segment is the honest rendering
+       * of 「这个数不存在」: the reader still has the label and the recency, which is what the picker
+       * is for. tests/verify-list-cache.mjs pins the gate that produces the absence. */
       function sessionOptionLabel(session, now) {
         var label = truncateText(session && session.label ? session.label : '', 42);
         var when = formatAgo(session ? session.lastActiveAt : null, now);
-        var tail = '（' + when + ' · ' + formatInt(session ? session.messageCount : null) + ' 条）';
+        var count = session ? session.messageCount : null;
+        var tail = isCount(count) ? '（' + when + ' · ' + formatInt(count) + ' 条）' : '（' + when + '）';
         if (!label) return '未命名会话 ' + tail;
         return label + ' ' + tail;
       }
@@ -3929,7 +4869,7 @@
           // it kept the excluded work visible enough that turning off 工具结果 left the
           // tool lane reading as a solid band, which is indistinguishable from no filter
           // at all. Positions still come from the full model, so the axis does not move.
-          if (filtering && !spanPassesFilter(span.record, hasQuery)) continue;
+          if (filtering && !spanPassesFilter(span.record)) continue;
           node.style.setProperty('--ov-lane', String(span.lane));
           node.style.setProperty('--ov-left', (left * 100).toFixed(4) + '%');
           node.style.setProperty('--ov-width', (width * 100).toFixed(4) + '%');
@@ -3982,10 +4922,50 @@
         dom.overviewTrack.removeAttribute('data-panning');
       }
 
+      /**
+       * The one writer of `state.overviewSelection` — R5: L3 writes L2 through exactly one setter.
+       *
+       * It used to be four writers (`dropOverviewSelection`, `setActualDuration`,
+       * `onOverviewPointerMove`, `onOverviewPointerUp`), which is a number no guard could assert:
+       * asserting four is a guard that cannot fail once the code is fixed, and asserting one is a
+       * guard that cannot pass until it is. The rule was written down and never checked.
+       *
+       * Only the field and the invariant that belongs to the field came in. What each call site does
+       * around it — resetting the window, re-rendering one face or both, starting the edge pan —
+       * differs at all four, and folding that in would trade 「one writer per field」 for 「one
+       * function that knows everything」. `overviewViewport` is a different field and a different
+       * write (L3's viewport, not L2's range); it stays where it is.
+       *
+       * The invariant is the one the old comment above dropOverviewSelection() stated as a rule:
+       * anything that clears the range has to disarm the gesture too. A brush in flight repaints the
+       * range on every pointer move, so clearing the field while it is armed lets a gesture the
+       * reader already abandoned keep painting the range back. Two of the four writers honoured that
+       * because they were the two that had been written to honour it; the other two set the field
+       * directly. One writer makes it true for all of them, which is the whole thing a single writer
+       * buys — not a smarter function, but nobody left who can forget.
+       */
+      function setOverviewSelection(value) {
+        if (value === null) abortOverviewDrag();
+        state.overviewSelection = value;
+      }
+
+      /**
+       * Drops the strip selection and nothing else — no zoom, no window re-decision, no render.
+       *
+       * Split out of clearOverviewSelection() because that one is a *control*: it clears the zoom
+       * too, because a reader pressing it wants the strip back the way it was. A filter reset needs
+       * only the selection, and needs it for two reasons: a reader who zoomed the strip to find a
+       * turn should not lose that zoom because they widened the filters, and writing the field
+       * directly never aborted the brush — so a drag left in flight kept repainting a range the
+       * filters had just discarded.
+       */
+      function dropOverviewSelection() {
+        setOverviewSelection(null);
+      }
+
       function clearOverviewSelection() {
         if (!state.overviewSelection && !state.overviewViewport) return;
-        abortOverviewDrag();
-        state.overviewSelection = null;
+        dropOverviewSelection();
         state.overviewViewport = null;
         resetWindowMode();
         renderOverview();
@@ -3998,7 +4978,7 @@
         writeDurationPreference(value);
         // The two modes share no axis, so a range or a zoom made in one is meaningless
         // in the other. Reset rather than reinterpret.
-        state.overviewSelection = null;
+        setOverviewSelection(null);
         state.overviewViewport = null;
         resetWindowMode();
         renderOverview();
@@ -4196,7 +5176,7 @@
           }
           overviewDrag.start = Math.min(overviewDrag.anchorTime, time);
           overviewDrag.end = Math.max(overviewDrag.anchorTime, time);
-          state.overviewSelection = { start: overviewDrag.start, end: overviewDrag.end };
+          setOverviewSelection({ start: overviewDrag.start, end: overviewDrag.end });
           startOverviewEdgePan();
           renderOverviewSelection();
           return;
@@ -4301,7 +5281,7 @@
           start = center - minimum / 2;
           end = center + minimum / 2;
         }
-        state.overviewSelection = { start: start, end: end };
+        setOverviewSelection({ start: start, end: end });
         resetWindowMode();
         renderOverviewSelection();
         renderLedger();
@@ -4387,14 +5367,33 @@
       }
 
       /**
-       * Everything except 异常, in one place.
+       * Whether one record is in the current view — the one function that answers it (R2).
        *
-       * The ledger and the 异常 rule counts both go through here. They each had their own
-       * copy for a while, and the result was a button promising 246 rows next to a list
-       * showing 12 — the same 「筛选了但什么都没变」 this file keeps guarding against, moved
-       * up one level.
+       * The ledger walks `state.flat` and is handed `{turn, record}`; the overview strip is
+       * handed a bare record and looks the turn back up. Both ask here now. They each had
+       * their own copy for a while, and the result was a strip drawing spans for records the
+       * list refused to render — which reads as 「筛选了但什么都没变」 rather than as a bug, and
+       * is the shape this file has already paid for once on the kind axis.
+       *
+       * 异常 mode replaces the filter outright, strip included, so it is branched on first.
+       * That is what makes the exclusivity hold by construction instead of by two copies
+       * happening to agree: with no rule ticked the anomaly branch cannot run at all, because
+       * passesAnomaly() reads an empty rule list as "off" and lets everything through. Running
+       * the kind, query and range tests first and the anomaly test last — the order this was
+       * in before — drew spans for records the list had already stopped filtering on the
+       * moment a rule was ticked.
+       *
+       * `selection` is the overview brush, and it is an argument rather than a read of state
+       * because one caller passes null on purpose: the brush is drawn on this strip, and a
+       * strip that hid the records you were dragging a window over could not be used to drag
+       * one. Every other condition is read from state and has to apply to both callers, so the
+       * brush is the only thing that legitimately differs between them — and saying so in the
+       * signature is what stops the next reader from "fixing" the strip to apply it too.
        */
-      function passesBaseFilter(record, selection) {
+      function recordVisible(record, turn, selection) {
+        if (state.anomaly.rules.length > 0) {
+          return passesAnomaly(record, { turn: turn || null, liveTurn: liveTurn() }, state.anomaly.rules);
+        }
         if (!hasKind(record, state.kinds)) return false;
         if (state.query && !matchesQuery(record, state.query)) return false;
         // The overview brush is a further filter, applied after kind and text so that
@@ -4404,31 +5403,77 @@
         return true;
       }
 
-      function anomalyContext(entry) {
-        return { turn: entry.turn, liveTurn: liveTurn() };
-      }
-
       /**
-       * How many records each rule would keep, given every other filter exactly as it stands.
-       * Counted through passesBaseFilter so a button can never advertise a number the ledger
-       * will not deliver. `any` counts records, not rule hits: one row can trip two rules,
-       * and 「全部异常」 promising more rows than exist is the same lie as promising fewer.
+       * What each 异常 button would show if it were the only one ticked.
+       *
+       * Counted over every record with no other filter applied, because that is exactly what
+       * 异常 mode does: the type axis, the search box and the time range all stop applying the
+       * moment a rule is on. Counting through recordVisible() — which is what this used to do,
+       * while the ledger was also applying those filters — produced a number no click could
+       * ever deliver, and that is the whole of the original defect: a button promising 283
+       * rows above a list showing 1,494. The only fix is to count the way the ledger filters,
+       * so the invariant is stated as a property of this function: the number on a button is
+       * what you get when you tick that button and nothing else.
+       *
+       * Two units, because the rules are two kinds of thing. A record rule counts 条. A turn
+       * rule counts 轮, and counts the *turns*, not the records inside them: 无答复 fires on
+       * every record of a turn that never answered, so counted in records it advertised 1,244
+       * "unanswered" rows that carry no sign of being unanswered — while the session was in
+       * fact broken a dozen times. A unit is a claim about what the number counts, and the two
+       * cannot share one.
+       *
+       * `any` counts records, not rule hits: one row can trip two rules, so it never equals the
+       * sum of the parts. That is why it is labelled as the union and not as a total.
+       *
+       * `selected` is the union of the rules that are actually ticked, which is a different
+       * number from `any` whenever the selection is not the whole table. It is counted here rather
+       * than recomputed where it is used because this loop already holds `hits` for every record:
+       * asking again would be a second full walk of a session that can hold twenty thousand rows
+       * and re-renders on every poll. And `visibleEntries()` filters on exactly this predicate, so
+       * `selected` is the length of the list under the buttons — the same promise every other
+       * number on this row makes.
+       *
+       * @returns {{byRule: Object, unit: Object, any: number, selected: number, total: number}}
        */
       function anomalyCounts() {
         var byRule = {};
-        for (var i = 0; i < ANOMALY_RULES.length; i += 1) byRule[ANOMALY_RULES[i].id] = 0;
+        var unit = {};
+        for (var i = 0; i < ANOMALY_RULES.length; i += 1) {
+          byRule[ANOMALY_RULES[i].id] = 0;
+          unit[ANOMALY_RULES[i].id] = ANOMALY_RULES[i].turn ? '轮' : '条';
+        }
         var any = 0;
-        var selection = state.overviewSelection;
+        var selected = 0;
+        var sel = state.anomaly.rules;
         var live = liveTurn();
+        var counted = {};
         for (var j = 0; j < state.flat.length; j += 1) {
           var entry = state.flat[j];
-          if (!passesBaseFilter(entry.record, selection)) continue;
           var hits = recordAnomalyRules(entry.record, { turn: entry.turn, liveTurn: live });
           if (!hits.length) continue;
           any += 1;
-          for (var k = 0; k < hits.length; k += 1) byRule[hits[k]] += 1;
+          for (var s = 0; s < hits.length; s += 1) {
+            if (sel.indexOf(hits[s]) >= 0) {
+              selected += 1;
+              break;
+            }
+          }
+          for (var k = 0; k < hits.length; k += 1) {
+            var id = hits[k];
+            var rule = anomalyRuleById(id);
+            if (!rule || !rule.turn) {
+              byRule[id] += 1;
+              continue;
+            }
+            // A turn rule reaches every record of its turn, so the turn is what gets counted,
+            // and only the first record of that turn to arrive counts it.
+            var key = id + '#' + entry.turn.index;
+            if (counted[key]) continue;
+            counted[key] = true;
+            byRule[id] += 1;
+          }
         }
-        return { byRule: byRule, any: any };
+        return { byRule: byRule, unit: unit, any: any, selected: selected, total: state.flat.length };
       }
 
       /**
@@ -4445,30 +5490,77 @@
         return out;
       }
 
+      /**
+       * The rows of the table, in order.
+       *
+       * Which of the two filter systems is in force is decided inside recordVisible(), not
+       * here: 异常 mode replaces the type axis, the search box, the time range and the
+       * overview brush rather than stacking with them, and that either/or belongs to one
+       * place. This loop supplies only what it alone has — the turn off each flat entry, and
+       * the brush, which the ledger does apply (the strip deliberately does not; the reason
+       * is in recordVisible()).
+       */
       function visibleEntries() {
         var out = [];
         var selection = state.overviewSelection;
         for (var i = 0; i < state.flat.length; i += 1) {
           var entry = state.flat[i];
-          if (!passesBaseFilter(entry.record, selection)) continue;
-          if (!passesAnomaly(entry.record, anomalyContext(entry), state.anomalyRules)) continue;
+          if (!recordVisible(entry.record, entry.turn, selection)) continue;
           out.push(entry);
         }
         return out;
       }
-
-      function revealSelection() {
-        if (!state.selectedId) return;
-        for (var i = 0; i < state.flat.length; i += 1) {
-          if (state.flat[i].record.id === state.selectedId) {
-            var needed = state.flat.length - i;
-            if (needed > state.limit) state.limit = Math.min(needed, state.flat.length);
-            return;
-          }
+      /**
+       * Whether the record the inspector is showing still belongs to the table.
+       *
+       * It used to ask `state.flat` — the whole session, unfiltered — so a record stayed selected
+       * after every filter had already removed it: the ledger read 已显示 2 条, the inspector still
+       * showed the row the reader had picked, and no row anywhere carried the selection mark. The
+       * list handed in here is the filter result the table is narrowed from, not the session, so a
+       * record this accepts is by construction one the filters kept.
+       *
+       * It runs from renderLedger(), which is the one exit every path that changes what the table
+       * shows goes through: the filters that call render() and the ones that call renderLedger()
+       * directly.
+       *
+       * The list is the *filtered* rows, not the windowed ones, and this paragraph used to say the
+       * opposite. The order settled first: the judgement runs after the window is sliced, so it
+       * looks at the table as it is about to be drawn rather than at a pre-slice list. The
+       * argument was corrected after that, and the reason is measured rather than argued — the
+       * window is a projection that slides on its own, every new record pushing the tail forward
+       * by a row, so a record leaving it measures the projection's motion and not the reader's
+       * attention. The numbers behind that are written out at the call site in renderLedger().
+       *
+       * The order half has never stopped holding, and neither has the prohibition it came with:
+       * the window is not widened to reach a selection sitting below it. This writes one field,
+       * `state.selectedId`, and nothing else — the window belongs to the window controls, and a
+       * judgement that also moved it would be a second writer of `state.limit`.
+       *
+       * @param {Array<{record: any}>} entries the filtered rows — `matched`, not `windowed`
+       * @returns {boolean} true when it dropped the selection — the caller has to redraw the panel,
+       *   because nine of the paths that reach here never redraw it themselves
+       */
+      function revealSelection(entries) {
+        if (!state.selectedId) return false;
+        for (var i = 0; i < entries.length; i += 1) {
+          if (entries[i].record.id === state.selectedId) return false;
         }
         state.selectedId = null;
+        return true;
       }
 
+      /**
+       * The selected record, or null.
+       *
+       * This looks the id up in `state.flat` on purpose, and it is not where the selection is
+       * judged: `flat` is the unfiltered session, and treating it as "what the reader can see" is
+       * the bug this file's revealSelection() exists to prevent. By the time anything calls this,
+       * `state.selectedId` has already survived the filter that produced the rows on screen, so a
+       * plain lookup is correct — and staying a lookup keeps the five readers of it (the inspector,
+       * copy, hand-off, the hand-off button) from each re-deciding the question for themselves.
+       *
+       * @returns {{record: any}|null}
+       */
       function selectedRecord() {
         if (!state.selectedId) return null;
         for (var i = 0; i < state.flat.length; i += 1) {
@@ -4665,32 +5757,27 @@
         return state.query !== '' || state.kinds.length !== KIND_ORDER.length
           || state.overviewSelection !== null
           || hasTimeRange()
-          || state.anomalyRules.length !== 0
+          || state.anomaly.rules.length !== 0
           ;
       }
 
       /**
-       * Whether one record belongs in the current filter.
+       * The strip's way into recordVisible(), and nothing else.
        *
-       * This must agree with visibleEntries() step for step. When it did not, the overview
-       * strip drew spans for records the list refused to render, which is how "filtered
-       * but nothing changed" happened.
+       * It looks the owning turn back up because the strip is handed a bare record while the
+       * ledger gets `{turn, record}` off the flat entry — the same question, the same table,
+       * one lookup apart. It passes no brush, for the reason recordVisible() gives.
+       *
+       * What it must not do is hold a predicate of its own. It used to hold a copy of the
+       * whole decision, and the two copies drifted: the strip drew spans for records the
+       * list refused to render, which reads to the reader as "filtered but nothing changed"
+       * rather than as a bug. Adapting the caller's argument shape is not a second opinion;
+       * answering the question again would be.
        */
-      function spanPassesFilter(record, hasQuery) {
-        if (!hasKind(record, state.kinds)) return false;
-        if (hasQuery && !matchesQuery(record, state.query)) return false;
-        // The range is a filter here too. Leaving it out made the overview draw spans for
-        // records the list refused to render — the same "filtered but nothing changed" this
-        // function exists to prevent.
-        if (!inTimeRange(record)) return false;
-        // 异常 belongs here for the same reason. The strip is handed a bare record, so the
-        // owning turn comes back out of turnById instead of off the flat entry the ledger
-        // gets — the same question, the same table, one lookup apart.
+      function spanPassesFilter(record) {
         var owner = record ? turnById.get(record.turnId) : null;
-        if (!passesAnomaly(record, { turn: owner || null, liveTurn: liveTurn() }, state.anomalyRules)) return false;
-        return true;
+        return recordVisible(record, owner || null, null);
       }
-
       function buildTurnHead(turn, entries) {
         // Plain text, not a button. There is no per-turn fold left to toggle, and a
         // control that does nothing is worse than no control.
@@ -4834,6 +5921,83 @@
         return state.limit;
       }
 
+      /* ---------------- batched row build ---------------- */
+
+      /**
+       * Turn groups built per frame once a window is too large for one.
+       *
+       * Measured, not chosen. On this session at 18,924 rows across 150 turns, 25 groups is
+       * ~3,150 rows and ~145 ms of row construction — the largest slice of a frame this loop can
+       * take before the page stops answering the pointer.
+       *
+       * The alternative was measured and rejected rather than untried: skipping layout for the
+       * off-screen groups is about 4x faster over the whole build, but it needs one
+       * contain-intrinsic-size per group and real group heights span 11x across a session, so any
+       * single value makes the scroll height lie about how much document there is.
+       * tests/verify-intrinsic-size.mjs pins the per-group sizing used instead.
+       */
+      var LEDGER_BATCH_GROUPS = 25;
+
+      /**
+       * Bumped by every renderLedger() before it touches the ledger.
+       *
+       * A batch in flight carries the token it started with and stops the moment that no longer
+       * matches, so a new exit never has to hunt down and abort a callback: there is exactly one
+       * thing to check and it is this number. Without it, the ten writers of "what the table
+       * shows" would have to interleave into one ledger and the reader would see two tables
+       * interleaved in the order their row loops happened to finish.
+       */
+      var ledgerBuildToken = 0;
+
+      /** {rows, total} while a batched build runs, null the rest of the time. */
+      var ledgerProgress = null;
+
+      /**
+       * The last (shown, hiddenAbove, total) updateWindowBar() was given.
+       *
+       * Kept so that progress can be re-reported by re-running that function rather than by
+       * writing the count node directly — the window bar has one writer and a second one is the
+       * two-writers defect this exit exists to prevent (D8).
+       */
+      var ledgerWindow = null;
+
+      /** A poll tick that arrived while the ledger was still being built. */
+      var pollDeferred = false;
+
+      /** Whether a batched build is running. One tick every 2.5 s asks this before it redraws. */
+      function ledgerBuilding() {
+        return ledgerProgress !== null;
+      }
+
+      /**
+       * Report how far a batched build has got, or that it is over.
+       *
+       * @param {number|null} rows rows built so far, or null when the build has finished
+       * @param {number} [total] the rows the window will hold when it finishes
+       */
+      function setLedgerProgress(rows, total) {
+        ledgerProgress = rows === null ? null : { rows: rows, total: total };
+        if (ledgerWindow) {
+          updateWindowBar(ledgerWindow.shown, ledgerWindow.hiddenAbove, ledgerWindow.total);
+        }
+      }
+
+      /**
+       * The one poll tick that was held back while the ledger was being built.
+       *
+       * An 全部 window over 18,924 rows takes about 4 s to lay out — longer than the poll interval
+       * — so admitting every tick would restart the build before it ever reached the end and the
+       * reader would watch the count reset forever. Instead the tick is remembered and this runs
+       * once the build finishes, which brings the session up to date without making the reader
+       * pay for a second build they did not ask for.
+       */
+      function flushDeferredPoll() {
+        if (!pollDeferred) return;
+        pollDeferred = false;
+        fetchSessions();
+        fetchTrajectory(false);
+      }
+
       function renderLedger() {
         var ledger = dom.ledger;
         /* Restoring the raw pixel offset is what made the list creep out from under the
@@ -4841,14 +6005,51 @@
            whole slice forward: the oldest row falls off the top and everything below it
            rises by one row. Restoring scrollY keeps the pixel but not the content, so
            each poll quietly moved the page. Anchor on the topmost row that is actually
-           on screen and restore *its* position instead. */
-        var anchor = firstVisibleRow();
-        var scrollY = window.scrollY || window.pageYOffset || 0;
+           on screen and restore *its* position instead.
+
+           The intent is captured once per chain, not once per pass. clear(ledger) below
+           collapses a 716,000px document to about 1,500px and the browser clamps scrollY
+           to match (measured 715,080 → 616), so there is no scroll position at all between
+           here and the build that puts it back. A pass that is superseded before it gets
+           there has to hand the intent on rather than re-read it from the wreckage — that
+           is what dropped the reader on the first turn. tests/verify-anchor-carry.mjs pins it. */
+        if (!pendingAnchor) {
+          pendingAnchor = { row: firstVisibleRow(), y: window.scrollY || window.pageYOffset || 0 };
+        }
+        var anchor = pendingAnchor.row;
+        var scrollY = pendingAnchor.y;
+
+        /* Any build still in flight belongs to the table this call is about to replace.
+           Bumping the token here retires it — there is no abort call to get wrong and no
+           window in which two loops append to the same list.
+
+           It sits *above* clear(ledger) rather than further down, because the four early
+           returns between them clear the ledger as well. With the bump below them a pass
+           that returned early retired nothing, leaving the previous build alive to append
+           turn groups into a skeleton — and, since it would then reach restoreRowAnchor()
+           with an anchor from a table that no longer exists, to move the page for it. */
+        ledgerBuildToken += 1;
+        /* Skipping has to be off for the whole build, not just for the first measurement.
+
+           `is-skipping-offscreen` lives on the ledger element, and clear(ledger) empties its
+           children without touching its own class — so the class set by one build is still there
+           for the next one. Every group appended from the second build onwards therefore lands
+           with `content-visibility: auto` already applied, and a skipped element is laid out by
+           its contain-intrinsic-size: the group measures 0, sizeBuiltGroup writes that 0 onto
+           it, and a group sized 0px occupies no space, so it can never re-enter the viewport and
+           is never re-rendered. The ledger stays collapsed — 140 KB of rows inside a 2,000 px
+           page — and because it collapses, scrolling up a little lands the reader at the top
+           instead of one row higher.
+
+           Ordering the class-on after the measurement loop is necessary but not sufficient: it
+           only fixes the first build after a page load. This line is what fixes the rest. */
+        ledger.classList.remove('is-skipping-offscreen');
         clear(ledger);
 
         if (state.loading) {
           ledger.appendChild(buildSkeleton());
           dom.ledgerMeta.textContent = '加载中';
+          forgetScrollAnchor();
           return;
         }
 
@@ -4857,12 +6058,14 @@
             stateBlock(null, '轨迹暂时不可用', '服务恢复后会自动重试，页面结构保持不变。')
           );
           dom.ledgerMeta.textContent = '不可用';
+          forgetScrollAnchor();
           return;
         }
 
         if (!state.payload) {
           ledger.appendChild(buildSkeleton());
           dom.ledgerMeta.textContent = '加载中';
+          forgetScrollAnchor();
           return;
         }
 
@@ -4876,6 +6079,7 @@
           );
           dom.ledgerMeta.textContent = '共 0 条';
           applyFilterScope();
+          forgetScrollAnchor();
           return;
         }
 
@@ -4883,22 +6087,82 @@
         var total = state.flat.length;
         applyFilterScope();
 
+        var windowed = matched.length > state.limit ? matched.slice(matched.length - state.limit) : matched;
+        var hiddenAbove = matched.length - windowed.length;
+
+        // Both answers belong to this exit rather than to each of its callers: whether the record
+        // the inspector is showing is still in the table, and how tall the pinned strips above it
+        // are now. Nine writers reach the table without going through render(), and judging the
+        // selection here is what stops the inspector describing a row the filters have removed.
+        //
+        // `matched`, not `windowed` — and this line used to say the opposite, so the reason it
+        // changed is worth more than the reason it was written.
+        //
+        // It said: what the reader can see is the window, not the filter result. That was written
+        // to fix a real thing (D13): this call used to RAISE `state.limit` to reach a selection
+        // below the window, which made the window a thing the inspector could widen, and left the
+        // promise 「已显示 200 条」 true at the moment the reader pressed 显示最新 200 条 and false a
+        // second later. **That part is still true and the prohibition still stands** — the window
+        // never widens to reach a selection, and it still does not below.
+        //
+        // What was wrong was the next inference: that a record leaving the window means the reader
+        // can no longer see it. The window is a *projection*, and it moves on its own — every new
+        // record slides the whole tail forward by one row. So 「not in the window」 was measuring
+        // the projection's motion, not the reader's attention. Measured on a real session (32,386
+        // records, 216 turns, the reader touching nothing): a record selected at position p of the
+        // 200-row tail survived exactly `200 - p` new records, and p=0 died after ONE of them,
+        // inside a single poll. On a session that is still being written, that is every selection
+        // that is not already the newest — which is why it read as 「过一会检视会消失」.
+        //
+        // The cost of the old judgement is visible in one measurement: on a narrow screen the scroll
+        // that pins the inspector to the viewport bottom is also the scroll that slides the selected
+        // row out of the window, so the reader could not look at a record and scroll to the panel at
+        // the same time. The inspector did not need the record to be on screen to describe it; it
+        // needed the record to still be something the reader chose.
+        //
+        // What `matched` does still do, and is the half of the promise that survives: a record the
+        // filters removed loses its selection, because then the inspector really would be describing
+        // something the reader cannot get back by clearing a filter.
+        //
+        // The redraw is part of that, not a follow-up: clearing the id on its own is not enough.
+        // The search box, the type axis and the overview brush call renderLedger() and nothing
+        // else, so the panel kept showing the record that had just been dropped — no row carried
+        // the selection mark and the inspector still named one.
+        if (revealSelection(matched)) renderInspector();
+
         if (matched.length === 0) {
           var reset = el('button', 'btn', '清除筛选');
           reset.type = 'button';
           reset.addEventListener('click', function () {
             clearFilters();
           });
-          ledger.appendChild(
-            stateBlock(null, '当前筛选条件下没有命中记录', '共 ' + total + ' 条记录中没有匹配项，可以放宽类型或搜索词。', reset)
-          );
+          // The hint has to name a control the reader can actually use. Under an anomaly rule the
+          // type chips and the search box are inert — syncAnomalyMode() marks them so, precisely
+          // because ticking a rule already reset them — so 「放宽类型或搜索词」 points at two things
+          // that do nothing when pressed, and the reader is left hunting for which of five controls
+          // to undo. 清除筛选 is the one control that always works, and it is already on the button.
+          var anomalyOn = state.anomaly.rules.length > 0;
+          var hint = anomalyOn
+            ? '共 ' + total + ' 条记录里没有符合所选异常规则的记录。类型与搜索在异常模式下不参与筛选，要回到全部记录请点「清除筛选」。'
+            : '共 ' + total + ' 条记录中没有匹配项，可以放宽类型或搜索词。';
+          ledger.appendChild(stateBlock(null, '当前筛选条件下没有命中记录', hint, reset));
+          forgetScrollAnchor();
           return;
         }
 
-        var windowed = matched.length > state.limit ? matched.slice(matched.length - state.limit) : matched;
-        var hiddenAbove = matched.length - windowed.length;
-
         updateWindowBar(windowed, hiddenAbove, total);
+
+        // D44: the two-ends jump is re-decided here rather than only from its observer. Measured on
+        // a real session: wired to the observer alone, the button stayed `hidden` for 24 of 30 scroll
+        // positions, because the observer only speaks when the intersection CHANGES and going from
+        // an empty ledger to 32,000 rows never changed it — the sentinel was simply somewhere else
+        // the whole time. The label was wrong at the top for the same reason, and stayed wrong until
+        // the next intersection change.
+        //
+        // So the render is the trigger, and the observer is the cheap hint for the scrolls in
+        // between. Both go through this one function, and it re-reads the sentinel rather than
+        // trusting the callback's own flag: a missed callback then costs one render, not one session.
+        setLedgerJumpLabel();
 
         var groups = visibleTurns(windowed);
 
@@ -4911,30 +6175,118 @@
         var lastTurn = groups.length ? groups[groups.length - 1].turn.index : null;
         dom.ledgerMeta.textContent = turnRangeLabel(firstTurn, lastTurn);
 
-        for (var i = 0; i < groups.length; i += 1) {
-          var group = groups[i];
-          var section = el('section', 'turn-group');
-          section.setAttribute('aria-label', '第 ' + (isCount(group.turn.index) ? group.turn.index : DASH) + ' 轮');
-          section.appendChild(buildTurnHead(group.turn, group.entries));
-          var list = el('ul', 'row-list');
-          // Every entry that survived the filters becomes a row. There is no second pass
-          // that hides anything, so what is on screen is exactly what was selected.
-          var rails = railStates(group.entries);
-          for (var j = 0; j < group.entries.length; j += 1) {
-            var item = el('li');
-            if (group.entries[j].record.kind === 'compaction') {
-              item.className = 'compaction-cell';
-              item.appendChild(buildCompactionBand(group.entries[j]));
-            } else {
-              item.appendChild(buildRow(group.entries[j], rails[j]));
+        /**
+         * One batch: build up to LEDGER_BATCH_GROUPS turns, then hand the frame back.
+         *
+         * Declared here rather than beside the other helpers so that the row loop — including the
+         * compaction routing, which client-check.mjs reads out of renderLedger() for exactly this
+         * reason — stays the text it has always been. What the rows *are* has not changed; only
+         * how many are built before the browser gets the thread back.
+         *
+         * Nothing here changes what the window promises to show. 「显示全部」 still means every
+         * record; it just stops meaning it inside a single unbroken second and a half.
+         */
+        var build = { token: ledgerBuildToken, at: 0, rows: 0, bands: 0, heights: null };
+        var buildTotal = 0;
+        for (var b = 0; b < groups.length; b += 1) buildTotal += groups[b].entries.length;
+
+        function buildStep() {
+          // A newer renderLedger() owns the ledger now. Stop without touching it: the rows half
+          // built here belong to a table that no longer exists, and the exit that replaced it has
+          // already cleared the list.
+          if (build.token !== ledgerBuildToken) return;
+          var built = 0;
+          while (build.at < groups.length && built < LEDGER_BATCH_GROUPS) {
+            var group = groups[build.at];
+            build.at += 1;
+            var section = el('section', 'turn-group');
+            section.setAttribute('aria-label', '第 ' + (isCount(group.turn.index) ? group.turn.index : DASH) + ' 轮');
+            section.appendChild(buildTurnHead(group.turn, group.entries));
+            var list = el('ul', 'row-list');
+            // Every entry that survived the filters becomes a row. There is no second pass
+            // that hides anything, so what is on screen is exactly what was selected.
+            var rails = railStates(group.entries);
+            var bands = 0;
+            for (var j = 0; j < group.entries.length; j += 1) {
+              var item = el('li');
+              if (group.entries[j].record.kind === 'compaction') {
+                item.className = 'compaction-cell';
+                item.appendChild(buildCompactionBand(group.entries[j]));
+                bands += 1;
+              } else {
+                item.appendChild(buildRow(group.entries[j], rails[j]));
+              }
+              list.appendChild(item);
             }
-            list.appendChild(item);
+            section.appendChild(list);
+            build.rows += group.entries.length;
+            build.bands += bands;
+            // Every group is sized, including the ones built before the calibration existed —
+            // a group left unsized collapses to nothing the moment the class goes on, which is
+            // how a scrollbar ends up shorter than the table it is supposed to describe. On the
+            // first batch build.heights is still null, so this is a no-op and sizeBuiltGroup()
+            // below is what covers those groups.
+            applyIntrinsicSize(section, group.entries.length, bands, build.heights);
+            ledger.appendChild(section);
+            built += 1;
           }
-          section.appendChild(list);
-          ledger.appendChild(section);
+
+          // Calibrate after the first batch, never before: these groups are the only ones that
+          // have been laid out for real, and reading a height off a skipped subtree would be
+          // reading the prediction back. Read once — after this the class is on, and the same
+          // measurement would be quoting itself.
+          //
+          // The class therefore goes on LAST, after both measurements, and that ordering is the
+          // fix rather than a style preference. `content-visibility: auto` sizes a skipped element
+          // by its `contain-intrinsic-size`, and an element with none is laid out as if it were
+          // empty — so turning skipping on first makes every group in this batch measure 0, and
+          // sizeBuiltGroup then writes that 0 onto it. A group sized 0px occupies no space, so it
+          // can never come back into the viewport, so it is never re-rendered: the ledger stays
+          // collapsed for good and the document is two thousand pixels tall above a hundred and
+          // forty kilobytes of rows. It only showed up in the default window, where 200 records
+          // span fewer turns than LEDGER_BATCH_GROUPS and therefore the *whole* ledger is this
+          // batch; D15's own A/B ran on 显示全部, where the batch is long enough to sit in the
+          // viewport and get measured for real.
+          if (!build.heights) {
+            build.heights = calibrateRowHeights(ledger);
+            var firstBatch = ledger.querySelectorAll('.turn-group');
+            for (var f = 0; f < firstBatch.length && f < LEDGER_BATCH_GROUPS; f += 1) {
+              sizeBuiltGroup(firstBatch[f]);
+            }
+            ledger.classList.add('is-skipping-offscreen');
+          }
+
+          if (build.at < groups.length) {
+            setLedgerProgress(build.rows, buildTotal);
+            window.requestAnimationFrame(buildStep);
+            return;
+          }
+
+          setLedgerProgress(null);
+          restoreRowAnchor(anchor, scrollY);
+          // Before the measurement, not after it. flushDeferredPoll() only starts fetches, so
+          // nothing can re-enter the ledger from inside it today — but the exit that does this
+          // measuring has to stay the last word, and a trailing statement is the one place where
+          // a future synchronous call would quietly measure an empty page.
+          flushDeferredPoll();
+          // Measured here rather than at the end of render(): this is the one exit every path that
+          // changes what the table shows goes through — the filters that call render() and the nine
+          // that call renderLedger() directly. A filter that grows the band therefore cannot leave
+          // the offsets above describing the page as it was before the reader touched anything.
+          // syncAnomalyMode(), which writes the 异常 note that gives the band its third line, runs
+          // before this point inside render(), so the height is already final here.
+          // The early returns above deliberately do not measure: none of them can change the band,
+          // and emptying the ledger mid-flight is not a reason to move a pinned strip.
+          syncStickyOffsets();
         }
 
-        restoreRowAnchor(anchor, scrollY);
+        // Windows of a few groups never reach the yield: the while loop inside buildStep consumes
+        // all of them and falls straight through, so the default 200-row table is built exactly as
+        // it always was, in one pass, with no progress written and no frame spent. Seeding the
+        // progress only when there is more than one batch is what keeps that true — otherwise the
+        // common path paid for a 「正在显示 0 / 200 条」 that no reader ever saw.
+        if (groups.length > LEDGER_BATCH_GROUPS) setLedgerProgress(0, buildTotal);
+        buildStep();
       }
 
       /**
@@ -4964,15 +6316,49 @@
           clear(wrap);
           wrap.appendChild(parts.actions);
         }
+        // Kept so a mid-build progress tick can be re-reported by re-running this function rather
+        // than by writing the count node from somewhere else. See ledgerWindow's comment.
+        ledgerWindow = { shown: shown, hiddenAbove: hiddenAbove, total: total };
 
         applyAxisButton(parts.axis);
         applyWindowMode(parts, hiddenAbove);
         // The session's total turn count lives here, beside the record counts it explains —
         // not in the panel title, which describes only the rows on screen.
         var sessionTurns = state.payload && state.payload.stats ? state.payload.stats.turns : null;
+        if (ledgerProgress) {
+          // Mid-build the count reports what is actually on screen, not what the window will hold.
+          // 「已显示 18,924 条」 above three thousand rows that exist is the page promising a number
+          // it has not reached yet, which is the same defect as the one this whole exit exists to
+          // prevent — one surface describing a table that is not there.
+          //
+          // No 命中 here, deliberately. `ledgerProgress.total` is already the window being built, so
+          // 「正在显示 R / W」 is not something a reader can add to 共 N — the line has no ambiguity
+          // to fix. And `shown` / `hiddenAbove` below are the *previous* render's, held in
+          // ledgerWindow, so a 命中 derived from them here would print a stale filter result beside a
+          // live progress count.
+          parts.count.textContent =
+            (isCount(sessionTurns) ? '全场 ' + formatInt(sessionTurns) + ' 轮 · ' : '') +
+            '共 ' + formatInt(total) + ' 条 · 正在显示 ' + formatInt(ledgerProgress.rows) +
+            ' / ' + formatInt(ledgerProgress.total) + ' 条';
+          return;
+        }
+        // 「共 N 条」 is the whole session, unfiltered. The numbers beside it are not: 已显示 is the
+        // window and 更早的 is what sits above it, and those two add up to what the *filter* matched,
+        // not to the session. A reader who adds them lands on a third answer with nothing on the line
+        // saying which pair the arithmetic was supposed to use. Print the filter result and the line
+        // closes on itself.
+        //
+        // Derived rather than passed: `windowed` plus what is above it *is* the matched count, so this
+        // costs no third argument and cannot drift from the two numbers printed beside it. A
+        // caller-supplied figure would be a fourth copy of one fact, which is how two copies of a
+        // count start disagreeing.
+        var matchedCount = shown.length + hiddenAbove;
+        // Only when it is a different number: an unfiltered session would otherwise be told 共 24,516
+        // and 命中 24,516 on one line, which is the same fact twice and reads as two.
+        var matchedLabel = matchedCount === total ? '' : ' · 命中 ' + formatInt(matchedCount) + ' 条';
         parts.count.textContent =
           (isCount(sessionTurns) ? '全场 ' + formatInt(sessionTurns) + ' 轮 · ' : '') +
-          '共 ' + formatInt(total) + ' 条 · 已显示 ' + formatInt(shown.length) + ' 条' +
+          '共 ' + formatInt(total) + ' 条' + matchedLabel + ' · 已显示 ' + formatInt(shown.length) + ' 条' +
           (hiddenAbove > 0 ? ' · 更早的 ' + formatInt(hiddenAbove) + ' 条未加载' : '');
       }
 
@@ -5038,6 +6424,188 @@
         actions.appendChild(count);
 
         return { actions: actions, axis: axis, more: more, mode: mode, count: count };
+      }
+
+      /* ---------------- D44: the ledger's two ends ---------------- */
+
+      /**
+       * Whether the ledger's end is on screen, which is the whole of 「到最低 / 到最上」.
+       *
+       * A reading rather than a computation, and the reason is that 「the end」 moves every poll:
+       * the window is the newest N records and each new one slides it forward, so the bottom of the
+       * ledger is a different document position every 2.5 seconds. Anything derived from
+       * scrollHeight against a remembered value would be correct only between polls.
+       *
+       * One IntersectionObserver on one sentinel, created once. The alternative — a scroll listener —
+       * would be the third reader of the same scroll position on this page (the other two are
+       * scheduleInspectorDock and scheduleStickyOffsets), and it would exist only to relabel a
+       * button.
+       *
+       * @returns {boolean}
+       */
+      function ledgerEndInView() {
+        // Re-read the sentinel rather than returning the observer's flag. The flag is right when the
+        // callback fires and silently stale when it does not, and the states it describes — an empty
+        // ledger, a ledger that grew by 32,000 rows — are exactly the ones that never make it fire.
+        var sentinel = dom.ledgerEnd;
+        if (!sentinel || typeof sentinel.getBoundingClientRect !== 'function') return atLedgerEnd;
+        var r = sentinel.getBoundingClientRect();
+        var viewH = window.innerHeight || 0;
+        // Both edges, or neither: the first version tested `r.height > 0 || r.top < viewH`, and the
+        // sentinel is one pixel tall — so `r.height > 0` was always true and the label read 「到最上」
+        // at every scroll position. A trivially-true term inside an `||` is the same defect as a
+        // tautology in an assertion: it looks like a test and measures nothing.
+        atLedgerEnd = r.top < viewH && r.bottom > 0;
+        return atLedgerEnd;
+      }
+
+      var atLedgerEnd = false;
+      var ledgerEndObserver = null;
+      /**
+       * Has this ledger been jumped yet. False until the reader presses it once.
+       *
+       * D46: the first screen always points down, whatever the page is sitting at, because the
+       * reading 「the end is on screen」 is not yet true of anything the reader did — and drawing
+       * 「读者还没动」 as 「读者在最上」 invents a state that does not exist. So the position only
+       * gets a vote after the first press.
+       *
+       * One writer, the click handler, and it is never cleared: 「首屏」 is this page, not each
+       * session, so a reader who switches sessions has already moved on this page and the arrow
+       * goes straight back to reporting position. Resetting it per session is a different decision
+       * and wants its own round of questions.
+       */
+      var ledgerJumpUsed = false;
+
+      /**
+       * Where the next press goes — and the ONE answer both the arrow and the press read.
+       *
+       * These two used to call `ledgerEndInView()` each, which agreed because they were the same
+       * call. They agree here too, and for a stronger reason: the two states now differ by one
+       * flag, so reading the predicate twice instead of once would let the glyph and the scroll
+       * disagree for the first time. One function, two callers, no way for them to part.
+       */
+      function ledgerJumpGoesUp() {
+        return ledgerJumpUsed && ledgerEndInView();
+      }
+
+      /**
+       * A picture of the trip, not its name.
+       *
+       * The first version of this control printed 「到最低」 / 「到最上」. Text is the wrong shape
+       * for it twice over: the two labels are different widths, so a circle drawn around them
+       * changes size when it flips, and answering 「which end will this take me to」 costs a
+       * translation and a reading. The arrow answers it in one glance, and `aria-label` still
+       * carries the full sentence — this is a change of presentation, not of what the control
+       * announces to anyone who is not looking at it.
+       *
+       * The arrow names where a click would take you, so the control is never a 「go to where you
+       * already are」 button — which is the failure mode of a fixed two-state label, and the reason
+       * up is only the right arrow when up is the action and down only when it is.
+       *
+       * It moves the page and nothing else. It does not touch `state.limit`, so it cannot make the
+       * window wider — the prohibition D13 exists to enforce, and the one the window bar's
+       * 「已显示 N 条」 depends on. Both ends are already loaded: down reaches the newest 200, up
+       * reaches the oldest of them.
+       */
+      function setLedgerJumpLabel() {
+        var button = dom.ledgerJump;
+        if (!button) return;
+        var empty = !state.payload || !state.flat || state.flat.length === 0;
+        button.hidden = empty;
+        if (empty) return;
+        var up = ledgerJumpGoesUp();
+        var name = up ? 'arrowUp' : 'arrowDown';
+        // Rebuilt rather than swapped in place: there is no attribute selector that exchanges two
+        // `d` values, and a cross-fade on a 16px glyph reads as a flicker rather than as motion.
+        // The `data-arrow` read is what keeps this from rebuilding on every one of the scroll
+        // positions where the answer did not change.
+        var current = button.firstElementChild;
+        if (!current || current.getAttribute('data-arrow') !== name) {
+          button.textContent = '';
+          var glyph = icon(name);
+          glyph.setAttribute('data-arrow', name);
+          button.appendChild(glyph);
+        }
+        button.setAttribute('aria-label', up ? '跳到轨迹的最上（最早一条已加载的记录）' : '跳到轨迹的最低（最新一条已加载的记录）');
+      }
+
+      /**
+       * How much of the viewport the pinned filter band covers right now.
+       *
+       * Measured rather than read out of `--sticky-band-h`. The band is sticky, so its own
+       * rectangle already answers the question at the moment it is asked, and the variable is what
+       * the other pinned rows position themselves from — subtracting it here would be the second
+       * place on this page that knows the band is there.
+       */
+      function pinnedBandBottom() {
+        if (!dom.filterSticky || typeof dom.filterSticky.getBoundingClientRect !== 'function') return 0;
+        var bottom = dom.filterSticky.getBoundingClientRect().bottom;
+        return bottom > 0 ? bottom : 0;
+      }
+
+      /**
+       * The ledger's top, in document coordinates.
+       *
+       * 轨迹的最上, and not the page's — those are different places and the difference is most of
+       * the travel. `window.scrollTo(0, 0)` lands the reader above the filter band and the overview
+       * strip with the trajectory still entirely off screen below, so the control that claims to go
+       * 「up」 ends up showing the one place in this app that contains no records at all. The
+       * band's height is subtracted so the panel's own title clears it.
+       */
+      function ledgerTopOffset() {
+        var panel = dom.ledgerJump && typeof dom.ledgerJump.closest === 'function'
+          ? dom.ledgerJump.closest('.panel')
+          : null;
+        if (!panel) return 0;
+        var top = panel.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0);
+        return Math.max(0, top - pinnedBandBottom());
+      }
+
+      /**
+       * The ledger's bottom, in document coordinates.
+       *
+       * The sentinel's own bottom edge rather than the last row's, for the reason the sentinel
+       * exists at all: it is one element outside `#ledger`, so its position follows the panel
+       * instead of whatever the last poll happened to build. No band subtraction here, and the
+       * asymmetry with ledgerTopOffset() is the point — that one parks a top edge under the band,
+       * this one parks a bottom edge at the bottom of the viewport, and subtracting the band from
+       * both would push the last row under the pinned rows for no gain.
+       */
+      function ledgerBottomOffset() {
+        var sentinel = dom.ledgerEnd;
+        if (!sentinel || typeof sentinel.getBoundingClientRect !== 'function') return 0;
+        var bottom = sentinel.getBoundingClientRect().bottom + (window.scrollY || window.pageYOffset || 0);
+        return Math.max(0, bottom);
+      }
+
+      /** One-time. See setLedgerJumpLabel() for why the observer and not a scroll listener. */
+      function buildLedgerJump() {
+        var button = dom.ledgerJump;
+        var sentinel = dom.ledgerEnd;
+        if (!button || !sentinel || typeof IntersectionObserver !== 'function') return;
+
+        ledgerEndObserver = new IntersectionObserver(function (entries) {
+          for (var i = 0; i < entries.length; i += 1) {
+            atLedgerEnd = entries[i].isIntersecting;
+          }
+          setLedgerJumpLabel();
+        }, { rootMargin: '0px 0px -1px 0px' });
+        ledgerEndObserver.observe(sentinel);
+
+        button.addEventListener('click', function () {
+          // Read the predicate BEFORE arming it. Setting the flag first would make the very first
+          // press consult the position, and on a ledger that already fits on screen that sends the
+          // reader UP on the press that is supposed to be the one that goes down.
+          var up = ledgerJumpGoesUp();
+          window.scrollTo(0, up ? ledgerTopOffset() : ledgerBottomOffset());
+          // Armed after the scroll is issued, and the label is rewritten here rather than left to
+          // the observer: scrolling to the end you are already at fires no intersection event, and
+          // that is exactly the case where the arrow has to change.
+          ledgerJumpUsed = true;
+          setLedgerJumpLabel();
+        });
+
+        setLedgerJumpLabel();
       }
 
       /**
@@ -5109,14 +6677,107 @@
       }
 
       /**
+       * The reader's scroll intent, carried across builds.
+       *
+       * It has to be carried, because there is no moment where the position survives on its
+       * own. renderLedger() clears the ledger — which takes the document from 716,000px to
+       * about 1,500px, and the browser clamps scrollY to match — and the position only comes
+       * back at the end of the build, from restoreRowAnchor(). So the first pass of a chain
+       * writes down where the reader was, every pass after it re-uses that, and the pass that
+       * finishes consumes it. Anything else and each pass reads an anchor out of the wreckage:
+       * measured, a click on any row that landed while a poll build was in flight left the page
+       * anchored on the first turn for good, because the superseded build stopped at the token
+       * check and never reached the restore. Pinned by tests/verify-anchor-carry.mjs.
+       *
+       * It is dropped, not restored, by the paths that end a chain with no table to anchor to —
+       * loading, error, no payload, no sessions, no matches. Carrying an intent across one of
+       * those would apply it to a different session or a different filter than the one it was
+       * measured against.
+       *
+       * @type {{row: {id: string, top: number} | null, y: number} | null}
+       */
+      var pendingAnchor = null;
+
+      /** End a scroll-intent chain without restoring it. One writer, so one place. */
+      function forgetScrollAnchor() {
+        pendingAnchor = null;
+      }
+
+      /**
+       * The three row heights, read off groups that are really laid out.
+       *
+       * Never a constant. These are CSS pixels in whatever font, zoom and viewport the reader has,
+       * and the numbers move when the window is resized — so they are measured here, from the DOM
+       * the first batch actually built, and thrown away with the build.
+       *
+       * A median rather than a mean: one group with a stray long row must not shift every
+       * prediction on the page.
+       *
+       * @returns {{head: number, row: number, band: number}|null} null if the batch is not there
+       */
+      function calibrateRowHeights(ledgerEl) {
+        var heads = ledgerEl.querySelectorAll('.turn-head');
+        var rows = ledgerEl.querySelectorAll('.row-list > li:not(.compaction-cell)');
+        var bands = ledgerEl.querySelectorAll('li.compaction-cell');
+        if (!heads.length || !rows.length) return null;
+        return {
+          head: medianHeight(heads),
+          row: medianHeight(rows),
+          band: bands.length ? medianHeight(bands) : medianHeight(rows)
+        };
+      }
+
+      /** The middle of a set of element heights, in CSS pixels. 0 for an empty set. */
+      function medianHeight(nodes) {
+        var out = [];
+        for (var i = 0; i < nodes.length; i += 1) {
+          var h = nodes[i].getBoundingClientRect().height;
+          if (h > 0) out.push(h);
+        }
+        if (!out.length) return 0;
+        out.sort(function (a, b) { return a - b; });
+        return out[Math.floor((out.length - 1) / 2)];
+      }
+
+      /**
+       * Put one built group's predicted height on it, from the heights it was actually built with.
+       *
+       * Used for the first batch, which exists before there is anything to predict from. It reads
+       * the group's own DOM rather than its (rows, bands), because that is the same number and
+       * measuring it is the honest way to get it.
+       */
+      function sizeBuiltGroup(section) {
+        if (!section) return;
+        section.style.containIntrinsicSize =
+          Math.round(section.getBoundingClientRect().height) + 'px';
+      }
+
+      /**
+       * A group's predicted height from its own shape: one head, then rows and bands.
+       *
+       * `auto` on the left is what lets the browser prefer the size it has already rendered once
+       * the reader has scrolled past — so scrolling down and back does not accumulate drift.
+       */
+      function applyIntrinsicSize(section, rows, bands, heights) {
+        if (!heights) return;
+        var h = heights.head + rows * heights.row + bands * heights.band;
+        section.style.containIntrinsicSize = 'auto ' + Math.round(h) + 'px';
+      }
+
+      /**
        * Put the anchored row back where it was.
        *
        * It can legitimately be gone: parked at the very top of the list, enough records
        * can arrive to push it out of the window entirely. Then there is nothing to hold on
        * to and the old pixel offset is the best answer available, so fall back to it
        * rather than jumping to the top.
+       *
+       * Consuming the intent belongs here and not at the call site: this is the one place a
+       * chain ends, and a chain that ended without being consumed would hand its anchor to
+       * whatever came next.
        */
       function restoreRowAnchor(anchor, fallbackY) {
+        forgetScrollAnchor();
         if (anchor) {
           var after = anchorOffset(anchor.id);
           if (after !== null) {
@@ -5175,6 +6836,14 @@
        */
       function applyFilterScope() {
         if (!dom.kpiScope) return;
+        if (state.anomaly.rules.length > 0) {
+          // This line exists to name the filters the KPI does not follow. In 异常 mode there are
+          // none of them in force, so the usual wording would be pointing at two controls that
+          // are switched off and filtering nothing.
+          dom.kpiScope.textContent = '整场会话 · 当前只看异常记录';
+          dom.kpiScope.hidden = false;
+          return;
+        }
         if (hasTimeRange()) {
           var stats = kpiStats();
           var scope = '已按区间 ' + timeRangeLabel() + ' 统计';
@@ -5274,15 +6943,31 @@
         inspectorSay('');
       }
 
+      /**
+       * The anomaly axis at rest.
+       *
+       * A factory rather than a constant, because two callers assign this to `state.anomaly`.
+       * A shared object would let ticking a rule write through to whichever of them was still
+       * holding it — which is the two-writers defect this field was collapsed to avoid.
+       */
+      function defaultAnomaly() {
+        return { mode: 'single', rules: [], last: null };
+      }
+
+      /**
+       * Every axis back to its default, from the empty ledger's 「清除筛选」 button.
+       *
+       * The base axes are reset by resetBaseFilters() rather than assigned here, because two
+       * functions that both mean 「put it back」 and carry different fields is how the empty-state
+       * button came to leave a brush standing: it read as clearing the filters, and it cleared all
+       * but the one that visibleEntries() also reads.
+       */
       function clearFilters() {
-        state.kinds = KIND_ORDER.slice();
-        state.query = '';
-        state.anomalyRules = [];
-        clearTimeRange();
+        resetBaseFilters();
+        state.anomaly = defaultAnomaly();
         resetWindowMode();
-        if (dom.searchInput) dom.searchInput.value = '';
-        syncKindButtons();
-        syncAnomalyButtons();
+        if (dom.anomalyMulti) dom.anomalyMulti.checked = false;
+        syncAnomalyButtons(anomalyCounts());
         render();
       }
 
@@ -5424,6 +7109,411 @@
 
       /* ---------------- inspector ---------------- */
 
+      var INSPECTOR_DOCK_QUERY = '(max-width: 1080px)';
+      // The height the panel gets when the reader has not asked for another one. 2/5 of the
+      // window, on the reviewer's instruction (it was 1/4 through D22–D26).
+      //
+      // One constant, because this number used to be written twice — applyInspectorDock() and
+      // inspectorDockHeightNow() each had their own `innerHeight / 4`. Two writers of one number is
+      // how the two halves start disagreeing, and the failure is invisible: the default height the
+      // panel is given and the height a drag starts from are the same promise, so if only one of
+      // them is changed the drag starts from a height the reader never saw.
+      var INSPECTOR_DOCK_SHARE = 0.4;
+      /** The default docked height. The single place this number is computed. */
+      function inspectorDefaultDockHeight() {
+        return Math.round(window.innerHeight * INSPECTOR_DOCK_SHARE);
+      }
+      // Below this the panel head and its handle stop fitting, so a drag that would go further is
+      // refused rather than honoured. 160px is the smallest height that still shows the head, the
+      // locator and a couple of lines of the summary.
+      var INSPECTOR_MIN_DOCK_H = 160;
+      // The ledger keeps at least this share of the window, whatever the inspector is doing. It is
+      // one rule with two uses — the expanded cap and the drag clamp — because the reported complaint
+      // was that expanding the panel covered the rows outright, and a rule that only bounds one of
+      // the two ways the panel can grow is not that rule. Two copies of it would be two rules.
+      var INSPECTOR_LEDGER_SHARE = 0.25;
+      // D40: the hair of viewport the wide-screen inspector leaves below itself. Its bottom edge
+      // landing exactly on the window's reads as cut off rather than as 「there is more below」, and
+      // the region it scrolls in is only worth having if the reader can see that it scrolls.
+      var INSPECTOR_WIDE_BOTTOM_GAP = 12;
+      // D44: the hair of viewport between the ledger's two-ends jump and the top of a pinned
+      // inspector. It is a gap rather than a butt joint because a button flush against another
+      // control's border reads as one control with two labels. Measured on the narrow layout: the
+      // panel renders 360px and the button must sit 368px up, so the clearance is counted from the
+      // panel's own top edge rather than merely made non-negative.
+      var LEDGER_JUMP_CLEARANCE = 8;
+      var bottomReserveFrame = 0;
+
+      /**
+       * The viewport bottom the pinned inspector is occupying, measured and written once a frame
+       * after the dock state changed.
+       *
+       * Written to the root rather than to the panel, because the reader is in the OTHER panel: in
+       * the other column on a wide screen and below it on a narrow one, and a custom property only
+       * reaches descendants.
+       *
+       * Measured rather than derived from the caps, and the reader can drag one of those caps and
+       * folded's height is its header's height rather than any cap at all — so a formula here would
+       * be a third derivation of a number two other places already own.
+       *
+       * Coalesced into one frame because this runs from applyInspectorDock(), which runs on scroll.
+       */
+      function scheduleInspectorBottomReserve() {
+        if (bottomReserveFrame) return;
+        bottomReserveFrame = window.requestAnimationFrame(function () {
+          bottomReserveFrame = 0;
+          var panel = dom.inspectorPanel;
+          var reserve = 0;
+          if (panel && !panel.hidden
+              && panel.className.indexOf('is-inspector-') !== -1
+              && window.matchMedia(INSPECTOR_DOCK_QUERY).matches) {
+            reserve = Math.round(panel.getBoundingClientRect().height) + LEDGER_JUMP_CLEARANCE;
+          }
+          document.documentElement.style.setProperty('--inspector-bottom-reserve', reserve + 'px');
+        });
+      }
+
+      // …but never so little that the rows become a sliver. Below this the reader cannot read a
+      // row, which defeats the point of keeping any.
+      var INSPECTOR_MIN_LEDGER_H = 140;
+
+      /**
+       * The narrow-screen docking, and the one place that decides where the inspector is.
+       *
+       * Four values, of which three are heights the reader picks and one is a position:
+       *
+       *   flow   — the panel is in the document below the ledger. Where it starts, and where
+       *            「滚到最底部」 brings it back. This one is a position, not a height.
+       *   folded — pinned, down to its own header and nothing else.
+       *   docked — pinned to the bottom of the viewport at two fifths.
+       *   full   — pinned, uncapped, because the reader asked with the handle.
+       *
+       * Three of those four are pinned and one is not, and D36 is the story of how the fourth one
+       * did not exist: the panel carried `position: sticky; bottom: 0` in every state, so `flow`
+       * was a class name rather than a position — sticky dragged the panel 7471px up the document
+       * and in front of the ledger. The measurement is in the stylesheet; which of the two it is
+       * comes from updateInspectorDock() below.
+       *
+       * Nothing here reads a scroll *direction* and nothing writes a class on <body>. That is the
+       * shape D19 was withdrawn for — a scroll signal from outside the layer deciding what
+       * something inside it does. This decides the presentation of one panel, from that panel's
+       * own geometry plus one rectangle read out of the band above it, and touches nothing else on
+       * the page.
+       */
+      /**
+       * How much of the window is left under the pinned strips — the number both inspector layouts
+       * build their ceiling on.
+       *
+       * One reader for both values, deliberately. `syncStickyOffsets()` measures the band and the
+       * overview and writes them out; `applyInspectorDock()` used to read them back and re-derive the
+       * same sum on its own, and the wide ceiling was a third derivation from those same two numbers.
+       * Two derivations of one fact drift, and nothing noticed — each half had its own guards, and no
+       * guard ever said the two halves have to agree with each other.
+       *
+       * Read from the CSS variables rather than from `offsetHeight`, because those variables are what
+       * the panel's own `top` is built from. One source, so the top of the region and the height of
+       * the region cannot disagree about where the pinned stack ends.
+       */
+      function inspectorUnderPins() {
+        var root = getComputedStyle(document.documentElement);
+        var band = parseFloat(root.getPropertyValue('--sticky-band-h')) || 0;
+        var overview = parseFloat(root.getPropertyValue('--sticky-overview-h')) || 0;
+        return Math.round(window.innerHeight - band - overview);
+      }
+
+      function applyInspectorDock() {
+        var docked = state.inspectorDock !== 'flow';
+        var narrow = window.matchMedia(INSPECTOR_DOCK_QUERY).matches;
+
+        // Nothing selected, nothing to look at: the panel goes away rather than showing an empty
+        // shell the reader has to scroll past to reach the footer. The test is the selection field
+        // itself rather than a second `panelVisible` flag — a flag would be able to disagree with
+        // the selection, and nothing here would notice.
+        //
+        // state.selectedId rather than selectedRecord(): the latter walks state.flat, and this runs
+        // on every render. The "set but no longer in the payload" case is already handled by
+        // revealSelection(), which clears the id — so the id being set is the selection.
+        var hasSelection = state.selectedId !== null && state.selectedId !== undefined;
+        if (dom.inspectorPanel) dom.inspectorPanel.hidden = !hasSelection;
+        if (!hasSelection && state.inspectorDock !== 'flow') {
+          state.inspectorDock = 'flow';
+          docked = false;
+        }
+
+        // Measured, not derived from vh. This page lives in a host iframe where 100vh is not the
+        // reader's viewport, which is the reason client-check bans it — so the height the panel may
+        // take is read off the window and the offsets syncStickyOffsets() just measured, and
+        // written here.
+        //
+        // panelMax is what is left after the pinned strips *and* the ledger's guaranteed quarter.
+        // It is the ceiling for all three states, so the expanded panel stops short of covering
+        // the rows and a drag cannot grow past it either.
+        //
+        // Flow used to be exempt, on the grounds that at the end of the document it is an ordinary
+        // block and 「完全显示」 means uncapped. That is what shipped, and it was wrong: the panel
+        // carries `position: sticky; bottom: 0` in every state, and a sticky-bottom element taller
+        // than the scrollport has nowhere legal to sit. See the rule's own comment for the
+        // measurement. 「完全显示」 now means the content is all reachable and scrolls inside the
+        // panel, not that the panel grows without bound.
+        // Both ceilings are `underPins` minus a reserve, and only the reserve depends on the layout:
+        // in one column the ledger sits above the panel and cannot be squeezed out of the window, in
+        // two the ledger is in the other column and the two do not interact at all. So the reserve is
+        // the only thing this function decides, and the sum it subtracts from comes from the one
+        // helper — the same number the panel's `top` is built out of.
+        //
+        // Narrow only, and on purpose. Both variables written here are read by rules inside
+        // `max-width: 1080px` and by nothing else, so on a wide screen they were numbers that looked
+        // authoritative and governed nothing: measured at 1600x900, `--inspector-full-h` stood at
+        // 540px while the panel was being capped at 753px by a different variable entirely.
+        if (dom.inspectorPanel && narrow) {
+          var ledgerReserve = Math.max(
+            INSPECTOR_MIN_LEDGER_H,
+            Math.round(window.innerHeight * INSPECTOR_LEDGER_SHARE)
+          );
+          var panelMax = Math.max(INSPECTOR_MIN_DOCK_H, inspectorUnderPins() - ledgerReserve);
+          dom.inspectorPanel.style.setProperty('--inspector-full-h', panelMax + 'px');
+          // A quarter of the measured window, or the height the reader dragged to — clamped to the
+          // same ceiling the expanded state gets, so the two ways of making the panel taller cannot
+          // disagree about where the top one is.
+          var dockH = state.inspectorDockH;
+          if (dockH === null || dockH === undefined || !isFinite(dockH)) {
+            dockH = inspectorDefaultDockHeight();
+          }
+          dockH = Math.min(Math.max(Math.round(dockH), INSPECTOR_MIN_DOCK_H), panelMax);
+          dom.inspectorPanel.style.setProperty('--inspector-dock-h', dockH + 'px');
+        }
+
+        var folded = state.inspectorDock === 'folded';
+
+        if (dom.inspectorPanel) {
+          dom.inspectorPanel.classList.toggle('is-inspector-docked', state.inspectorDock === 'docked');
+          dom.inspectorPanel.classList.toggle('is-inspector-full', state.inspectorDock === 'full');
+          dom.inspectorPanel.classList.toggle('is-inspector-folded', folded);
+        }
+
+        // How much of the viewport bottom the panel is sitting on, for the one reader that needs it:
+        // the ledger's two-ends jump, which is sticky to the bottom of the same viewport and would
+        // otherwise land on top of the panel's action row.
+        //
+        // SCHEDULED, not written here, and the reason is the measurement. Reading
+        // `getBoundingClientRect()` in the same turn that toggles the class measures the layout as it
+        // was: measured on a real session the reserve came out 177px against a panel rendering at
+        // 360px, which put the button 32px inside the panel at eleven of eighteen scroll positions. So
+        // the read waits a frame, by which time the sticky layout has settled.
+        scheduleInspectorBottomReserve();
+
+        // The grip exists only while the panel is pinned: in flow there is no height to decide, and
+        // a grip that does nothing is worse than no grip. Folded has no height to drag either — its
+        // cap is the header, and dragging a header that cannot grow is the same dead control.
+        if (dom.inspectorResize) dom.inspectorResize.hidden = !(narrow && docked && !folded);
+
+        var minimize = dom.inspectorMinimize;
+        var expand = dom.inspectorExpand;
+        if (!minimize || !expand) return;
+        var expanded = state.inspectorDock === 'full';
+
+        // Both buttons exist only while the panel is pinned — in flow there is no height to
+        // change and a grip that does nothing is worse than no grip.
+        //
+        // They do not agree about the folded state, and that is the point. The minimize button
+        // stays: folded is the only state with no other way out, so hiding it there would turn
+        // 「fold it away」 into 「dismiss it」, which is not what the reader asked for. The expand
+        // button goes, because its contract is 「展开 与 半高两种状态切换」 and folded is neither
+        // of the two — leaving it on screen would mean inventing a third behaviour for it.
+        minimize.hidden = !narrow || !docked;
+        expand.hidden = !narrow || !docked || folded;
+
+        // Each label names what this click does, which is the whole reason there are two of
+        // them: before D38 one label had to cover three states and the reader had to count
+        // clicks to use it.
+        //
+        // The folded label is the one that has to be data-dependent. It used to be the constant
+        // 「恢复到半高」, so a panel folded from fully expanded came back to half height — an exit
+        // announcing something it was not going to do. It reads the same function the click reads.
+        var minLabel = folded
+          ? (inspectorFoldReturnDock() === 'full' ? '恢复到完全展开' : '恢复到半高')
+          : '折叠到最小';
+        minimize.setAttribute('aria-label', minLabel);
+        minimize.setAttribute('title', minLabel);
+
+        expand.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        var expandLabel = expanded ? '收起为半高' : '完全展开检视';
+        expand.setAttribute('aria-label', expandLabel);
+        expand.setAttribute('title', expandLabel);
+
+        // The glyph points the way the click goes: up while it makes the panel taller, down
+        // while it takes the height back. Written here rather than carried as two icons toggled
+        // by `hidden`, because `hidden` is not reliably honoured on an SVG element and this is
+        // the one place that already knows which state it is in.
+        if (dom.inspectorExpandIcon) {
+          dom.inspectorExpandIcon.setAttribute(
+            'd',
+            expanded ? 'M4 9.5 8 5.5 12 9.5' : 'M4 6.5 8 10.5 12 6.5'
+          );
+        }
+
+        // The minimize control's glyph follows its label: a dash while it means 「fold this away」,
+        // the standard restore mark while it means 「put it back where it was」. Same reason as the
+        // chevron above, and the same single writer — two glyphs toggled by `hidden` would not work
+        // anyway, since `hidden` is not reliably honoured on an SVG element.
+        if (dom.inspectorMinimizeIcon) {
+          dom.inspectorMinimizeIcon.setAttribute(
+            'd',
+            folded ? 'M3.5 8.5 h5.5 v5 h-5.5 z M6.5 8.5 v-5 h6 v5 h-2.5' : 'M3.5 8 H12.5'
+          );
+        }
+      }
+
+      /* ---------------- resizing the docked panel ----------------
+       *
+       * Three states, not two: the reader picks a docked height by dragging the panel's top edge.
+       * The drag is read off pointer movement against the height the panel had when the pointer
+       * went down, so it does not accumulate rounding over a long drag the way a running total
+       * would.
+       *
+       * Dragging is a statement about the *docked* height, so it drops the panel out of 'full': the
+       * fully expanded state is defined as "no cap", and a height the reader just chose is a cap.
+       * Leaving that implicit would mean the grip silently did nothing in the one state where it is
+       * most visible. */
+      var inspectorResizeDrag = null;
+
+      /** The height the panel is actually showing right now, for a drag to start from. */
+      function inspectorDockHeightNow() {
+        var h = dom.inspectorPanel ? dom.inspectorPanel.getBoundingClientRect().height : 0;
+        return h > 0 ? h : inspectorDefaultDockHeight();
+      }
+
+      function onInspectorResizeDown(event) {
+        if (event.button !== 0) return;
+        if (state.inspectorDock === 'flow') return;
+        if (!dom.inspectorResize) return;
+        dom.inspectorResize.setPointerCapture(event.pointerId);
+        inspectorResizeDrag = {
+          pointerId: event.pointerId,
+          anchorClientY: event.clientY,
+          anchorH: inspectorDockHeightNow()
+        };
+        // The page must not scroll under a resize drag; the grip's touch-action says so for touch,
+        // and this says it for the mouse.
+        event.preventDefault();
+      }
+
+      function onInspectorResizeMove(event) {
+        if (!inspectorResizeDrag) return;
+        // Only the pointer that started it may drive it, the same rule the overview brush uses.
+        if (inspectorResizeDrag.pointerId !== event.pointerId) return;
+        // The panel is pinned to the bottom, so its top edge is the one that moves: dragging up
+        // grows it. `clientY` not pageY — the panel is pinned, so page coordinates would add the
+        // scroll offset into the height.
+        var next = inspectorResizeDrag.anchorH + (inspectorResizeDrag.anchorClientY - event.clientY);
+        state.inspectorDockH = next;
+        setInspectorDock('docked');
+        event.preventDefault();
+      }
+
+      function onInspectorResizeUp(event) {
+        if (!inspectorResizeDrag) return;
+        if (inspectorResizeDrag.pointerId !== event.pointerId) return;
+        try { dom.inspectorResize.releasePointerCapture(event.pointerId); } catch (e) { /* already gone */ }
+        inspectorResizeDrag = null;
+      }
+
+      /**
+       * The one writer of `state.inspectorDock`, and the only reason it is a function.
+       *
+       * D38 turned one control into two, and two controls each assigning the field is two
+       * writers of one value — the thing R1 exists to prevent, and the thing that makes two
+       * controls quietly grow a third state nobody can name. So the buttons do not assign; they
+       * name where the click goes and this does the writing.
+       *
+       * No early return on an unchanged value, and that is load-bearing twice over. A drag calls
+       * this once per pointermove with the same `'docked'` it already had; skipping the repaint
+       * would make the panel stop growing halfway through a resize. `dockInspector()` and
+       * `resetInspectorDock()` keep their own guards, so a scroll frame that asks for the state
+       * the panel is already in still costs nothing.
+       */
+      function setInspectorDock(next) {
+        // Written here and nowhere else, on the way IN. 'flow' can only be folded away from if the
+        // control is reachable in flow, which it is not, so the panel is always at one of the two
+        // pinned heights by the time this runs — and `full` is the only one worth remembering.
+        if (next === 'folded') state.inspectorDockBeforeFold = state.inspectorDock;
+        state.inspectorDock = next;
+        applyInspectorDock();
+      }
+
+      /**
+       * The height the minimize control puts the panel back at when it is folded.
+       *
+       * One function for both readers — the button's click target and the button's own label. Two
+       * readers each spelling the rule is how they end up disagreeing, which is the exact defect this
+       * exists to close: a button that says 「恢复到半高」 and takes you to full height.
+       */
+      function inspectorFoldReturnDock() {
+        return state.inspectorDockBeforeFold === 'full' ? 'full' : 'docked';
+      }
+
+      function dockInspector() {
+        if (state.inspectorDock !== 'flow') return;
+        setInspectorDock('docked');
+      }
+
+      function resetInspectorDock() {
+        setInspectorDock('flow');
+      }
+
+      function updateInspectorDock() {
+        if (!dom.inspectorPanel) return;
+        if (!window.matchMedia(INSPECTOR_DOCK_QUERY).matches) {
+          if (state.inspectorDock !== 'flow') resetInspectorDock();
+          return;
+        }
+        // The question is the band's, not the panel's. D36: the reported rule is 「只有全部、异常、
+        // 轨迹这个区域处于最上方的时候, 检视才会强制下部显示」 — pinned while that region is at the top
+        // of the viewport, back in the document the moment it comes back down into view.
+        //
+        // `#filter-sticky` IS that region — 全部 / 类型 / 异常 / the generation note — and it is
+        // `position: sticky; top: 0`. Whether it is pinned at the top is therefore not a thing to
+        // compute: `rect.top` sits at 0 while the reader is past it and turns positive again the
+        // moment they scroll back up. No threshold to tune, no direction to read. Measured
+        // 2026-10-13 at 897x858: pinned at scrollY 692, released at 691, and tracking scrollY
+        // exactly (691.1 - scrollY) in between.
+        //
+        // What this replaced asked a different question and answered it early.
+        // `panel.rect.bottom === innerHeight` answers 「has the panel been pinned yet」, which on the
+        // same page happens around scrollY 550 — a hundred pixels before the band has reached the
+        // top, so the panel sat stuck to the bottom while the reader was still down in the filters.
+        //
+        // Two earlier attempts are recorded because they will look reasonable again:
+        //
+        //   - `rect.bottom >= innerHeight`, the loose form of the same idea, reads true for both
+        //     「scrolled past it」 and 「not reached yet」, and docks a panel the reader has not come
+        //     down to. Caught by probe as 「它缩在眼前」.
+        //   - `panel.offsetTop + panel.offsetHeight < scrollY`, and main.columns' bottom as a
+        //     second reference. The ledger is virtualised, so the height above the panel is an
+        //     estimate — measured offsetTop 926,767 against a real layout position near 934,100 —
+        //     and the panel is a child of main.columns, so pinning the panel pins the container's
+        //     bottom edge too. Both fire on scroll position rather than on the region leaving.
+        //
+        // Nothing is written to the band: no class, no attribute, no listener. The scroll handler
+        // is on `window`, and its only statement is scheduleInspectorDock() below.
+        var band = dom.filterSticky;
+        if (!band) return;
+        var pinned = band.getBoundingClientRect().top <= 1;
+        if (pinned) dockInspector();
+        else if (state.inspectorDock !== 'flow') resetInspectorDock();
+      }
+
+      // rAF-throttled: the ledger re-batches as it scrolls, so this can fire many times a frame
+      // and none of the intermediate answers change what the last one says.
+      var inspectorDockFrame = 0;
+      function scheduleInspectorDock() {
+        if (inspectorDockFrame) return;
+        inspectorDockFrame = window.requestAnimationFrame(function () {
+          inspectorDockFrame = 0;
+          updateInspectorDock();
+        });
+      }
+
       var TABS = [
         { id: 'summary', label: '摘要', available: function () { return true; } },
         { id: 'raw', label: '原文', available: function () { return true; } },
@@ -5456,6 +7546,13 @@
         var entry = selectedRecord();
         clear(dom.tablist);
         clear(dom.panels);
+
+        // Whether the panel is on the page at all is decided here rather than by the click handler
+        // that changed the selection: renderInspector() is the single exit every selection change
+        // goes through — selectRecord(), revealSelection(), the generation picker and every poll
+        // all land here — so deciding it anywhere else would be a second place to keep in sync.
+        // Both branches below need it, hence before the early return.
+        applyInspectorDock();
 
         if (!entry) {
           dom.inspectorLocator.textContent = '尚未选择记录';
@@ -5529,6 +7626,21 @@
 
         dom.copyBtn.disabled = false;
         updateHandoffButton();
+
+        // The panel just changed height, and its height is what decides whether sticky has it
+        // pinned to the viewport bottom. Nothing that got here fires scroll or resize, so the
+        // decision those two listeners normally make had not been made: the first appearance of
+        // the inspector inherited whatever state came before it. D32 made that visible — a panel
+        // that was already pinned reported `flow`, so it came up at panelMax with no handle.
+        //
+        // renderInspector() is the exit every selection change goes through (see above), so this is
+        // the one place that owns re-deciding it. The scheduler rather than updateInspectorDock()
+        // directly, because more DOM writes follow this call and a rAF measures what they settled
+        // into rather than what they are halfway through.
+        //
+        // The empty-selection branch above deliberately does not call it: applyInspectorDock() has
+        // already forced `hidden` and `flow` for that case, and there is no panel left to measure.
+        scheduleInspectorDock();
       }
 
       function activateTab(id) {
@@ -5699,8 +7811,9 @@
         var attempt = requestRaw(index).then(function (result) {
           delete rawPending[key];
           if (result.ok && result.body && Object.prototype.hasOwnProperty.call(result.body, 'raw')) {
-            rawCache[key] = result.body.raw;
-            return result.body.raw;
+            var entry = { raw: result.body.raw, omitted: result.body.omitted === true };
+            rawCache[key] = entry;
+            return entry;
           }
           var code = result.body && typeof result.body.error === 'string' ? result.body.error : '';
           var err = new Error(code || 'raw_unavailable');
@@ -5720,15 +7833,19 @@
       /**
        * What a reader should show for a record's message.
        *
-       * A record whose message was too large to carry resolves to null, which callers read
-       * as "there is no message body" and say so. Everything else resolves to the message or
-       * rejects: silently substituting the normalized row would put different content under
-       * a label that promises 原文, with nothing on the page to say it had happened.
+       * Resolves to `{ raw, omitted }`. Whether the message was too large to carry used to be
+       * a field on the record, checked here to short-circuit the fetch; it now travels with
+       * the answer instead, because deciding it meant serializing every message in the session
+       * on every poll to measure them against a cap. Pinned by tests/verify-raw-lazy.mjs.
+       *
+       * `omitted` and `raw === null` are the same state stated two ways, and a caller may test
+       * either. Everything else resolves to the message or rejects: silently substituting the
+       * normalized row would put different content under a label that promises 原文, with
+       * nothing on the page to say it had happened.
        *
        * @param {Record<string, any>} record
        */
       function rawSourceFor(record) {
-        if (record && record.rawOmitted) return Promise.resolve(null);
         return fetchRaw(record);
       }
 
@@ -5737,26 +7854,30 @@
         wrap.style.display = 'flex';
         wrap.style.flexDirection = 'column';
         wrap.style.gap = '8px';
-        if (record.rawOmitted) {
-          wrap.appendChild(el('p', 'note note-danger', '原文过大，已省略。可以从参数与结果页查看已保留的部分。'));
-        }
         if (record.textTruncated) {
           wrap.appendChild(el('p', 'note', '正文已截断：仅保留前段内容。'));
         }
         var pre = el('pre', 'pre');
         pre.setAttribute('tabindex', '0');
         wrap.appendChild(pre);
-        if (record.rawOmitted) {
-          pre.textContent = DASH;
-        } else {
-          pre.textContent = '正在读取原文…';
-          rawSourceFor(record).then(function (source) {
-            if (source === null || source === undefined) pre.textContent = DASH;
-            else pre.innerHTML = jsonColorize(source);
-          }, function () {
-            pre.textContent = '原文读取失败，请重试。';
-          });
-        }
+        // The two states the reader sees are unchanged; they now arrive with the answer rather
+        // than ahead of it, because deciding which one applied was what made the bulk response
+        // serialize every message in the session — see tests/verify-raw-lazy.mjs.
+        pre.textContent = '正在读取原文…';
+        rawSourceFor(record).then(function (fetched) {
+          if (fetched.omitted === true) {
+            wrap.insertBefore(
+              el('p', 'note note-danger', '原文过大，已省略。可以从参数与结果页查看已保留的部分。'),
+              pre
+            );
+            pre.textContent = DASH;
+            return;
+          }
+          if (fetched.raw === null || fetched.raw === undefined) pre.textContent = DASH;
+          else pre.innerHTML = jsonColorize(fetched.raw);
+        }, function () {
+          pre.textContent = '原文读取失败，请重试。';
+        });
         return wrap;
       }
 
@@ -5797,8 +7918,9 @@
         var done = function (ok) {
           inspectorSay(ok ? '已复制该记录的 JSON。' : '复制失败，请手动选择文本后复制。');
         };
-        rawSourceFor(record).then(function (source) {
-          var text = source === null || source === undefined ? stringify(record) : stringify(source);
+        rawSourceFor(record).then(function (fetched) {
+          var noRaw = fetched.omitted === true || fetched.raw === null || fetched.raw === undefined;
+          var text = noRaw ? stringify(record) : stringify(fetched.raw);
           if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
             navigator.clipboard.writeText(text).then(
               function () {
@@ -5874,14 +7996,18 @@
         rawSourceFor(record).then(function (fetched) {
           // A message too large to carry has no raw; the normalized record is then the most
           // there is, which is what this sent before raw became a separate fetch.
-          var rawSource = fetched === null || fetched === undefined ? stripVolatile(record) : fetched;
+          var omitted = fetched.omitted === true;
+          var rawSource = omitted || fetched.raw === null || fetched.raw === undefined
+            ? stripVolatile(record)
+            : fetched.raw;
           var raw = truncateJson(rawSource, HANDOFF_RAW_LIMIT);
           var text = buildHandoffMarkdown(
             state.payload ? state.payload.session : null,
             entry.turn,
             record,
             raw.text,
-            raw.truncated
+            raw.truncated,
+            omitted
           );
           inspectorSay('已发出请求，等待你在弹出的确认框中确认…');
           var result = message.append(text);
@@ -5909,6 +8035,57 @@
 
       /* ---------------- top-level render ---------------- */
 
+      /**
+       * Publishes the heights of the pinned bands so everything below them can be positioned from
+       * a measurement instead of a number written down once.
+       *
+       * The alternative was three constants — 32 for the type row, 51 for the overview strip, 45
+       * for the window bar — and they were already wrong the moment the 异常 row joined the band:
+       * that row wraps at narrow widths and grows a line when its note appears, so no constant can
+       * stay right. This runs at the end of `render()`, after the note has been written and the
+       * buttons re-counted, which is the only moment the band's height is final. `offsetHeight`
+       * rather than `getBoundingClientRect().height`, so a fractional device-pixel ratio cannot
+       * make the bands overlap by a third of a pixel per poll.
+       */
+      function syncStickyOffsets() {
+        if (!dom.filterSticky || !dom.overview || !dom.windowBar) return;
+        var root = document.documentElement.style;
+        var band = dom.filterSticky.offsetHeight;
+        var overview = dom.overview.offsetHeight;
+        root.setProperty('--sticky-band-h', band + 'px');
+        root.setProperty('--sticky-overview-h', overview + 'px');
+        root.setProperty('--sticky-window-h', dom.windowBar.offsetHeight + 'px');
+        // D40: the wide-screen inspector's ceiling, from the same two numbers the panel's `top` is
+        // built out of — so the top of the region and the height of the region cannot disagree about
+        // where the pinned stack ends. Measured, never vh; see the note in client-check.
+        //
+        // Wide only, for the reason given on the other writer: on a narrow screen this variable is
+        // read by nothing at all. It was written on both, which meant that at every width exactly
+        // one of the two ceilings was live and the other was a number nobody was reading.
+        if (!window.matchMedia(INSPECTOR_DOCK_QUERY).matches) {
+          root.setProperty('--inspector-wide-h', Math.max(
+            0,
+            inspectorUnderPins() - INSPECTOR_WIDE_BOTTOM_GAP
+          ) + 'px');
+        }
+      }
+
+      var stickyFrame = null;
+
+      /**
+       * One measurement per frame, however many resize events arrive.
+       *
+       * Every call reads three offsetHeights, which forces layout; a window drag fires `resize`
+       * continuously, and measuring on each one turns a drag into a layout thrash.
+       */
+      function scheduleStickyOffsets() {
+        if (stickyFrame !== null) return;
+        stickyFrame = window.requestAnimationFrame(function () {
+          stickyFrame = null;
+          syncStickyOffsets();
+        });
+      }
+
       function render() {
         renderBars();
         renderGeneration();
@@ -5928,7 +8105,14 @@
         syncRangeBounds();
         // The 异常 buttons carry a count that has to follow the session and every other filter,
         // exactly like the refresh button's decision to appear.
-        syncAnomalyButtons();
+        // Which of the two filter systems is in force is decided here, before anything reads a
+        // count or draws a span, so the strip, the buttons and the ledger cannot each answer a
+        // different question. One walk feeds both: `render()` hands the same object to the note
+        // and to the buttons, so the number in the prose and the number on a button are two
+        // readings of one snapshot rather than two walks of a session that is still growing.
+        var anomaly = anomalyCounts();
+        syncAnomalyMode(anomaly);
+        syncAnomalyButtons(anomaly);
         renderOverview();
         renderLedger();
         renderInspector();
@@ -6062,6 +8246,18 @@
       function buildAnomalyButtons() {
         if (!dom.anomalyControls) return;
         dom.anomalyControls.textContent = '';
+
+        // First, and not as one choice among the others: this is the state the page opens in
+        // and the only way back out of them. Built here rather than written into the markup so
+        // it cannot drift out of step with the buttons it has to reverse.
+        var none = el('button', 'btn btn-quiet anomaly-btn anomaly-btn-none');
+        none.type = 'button';
+        none.id = 'anomaly-none';
+        none.setAttribute('data-anomaly-none', '');
+        none.setAttribute('aria-pressed', 'true');
+        none.appendChild(el('span', 'anomaly-label', ANOMALY_NONE_LABEL));
+        dom.anomalyControls.appendChild(none);
+
         for (var i = 0; i < ANOMALY_RULES.length; i += 1) {
           var rule = ANOMALY_RULES[i];
           var button = el('button', 'btn btn-quiet anomaly-btn');
@@ -6073,6 +8269,8 @@
           button.appendChild(el('span', 'anomaly-count', '0'));
           dom.anomalyControls.appendChild(button);
         }
+
+        // Last, so the row reads left to right as: everything, then each kind, then any kind.
         var all = el('button', 'btn btn-quiet anomaly-btn');
         all.type = 'button';
         all.id = 'anomaly-all';
@@ -6080,52 +8278,217 @@
         all.setAttribute('aria-pressed', 'false');
         all.appendChild(el('span', 'anomaly-label', '全部异常'));
         all.appendChild(el('span', 'anomaly-count', '0'));
-        dom.anomalyControls.insertBefore(all, dom.anomalyControls.firstChild);
+        dom.anomalyControls.appendChild(all);
       }
 
       /**
        * Counts and pressed state for the 异常 buttons. Both are read from the same pass the
        * ledger filters through, so a number on a button and the rows below it are the same
        * statement about the same records.
+       *
+       * The counts are passed in rather than walked again here: `render()` takes one snapshot and
+       * hands the same object to this and to `syncAnomalyMode()`. That is not only cheaper — two
+       * walks over a live session can disagree, because the session grows between them, and a
+       * button count that did not come from the same read as the note beside it is the exact
+       * mismatch this row was built to end.
        */
-      function syncAnomalyButtons() {
+      function syncAnomalyButtons(counts) {
         if (!dom.anomalyControls) return;
-        var counts = anomalyCounts();
         var buttons = dom.anomalyControls.querySelectorAll('.anomaly-btn');
         for (var i = 0; i < buttons.length; i += 1) {
           var button = buttons[i];
+          var isNone = button.hasAttribute('data-anomaly-none');
           var isAll = button.hasAttribute('data-anomaly-all');
           var id = button.getAttribute('data-anomaly-rule');
-          var n = isAll ? counts.any : (counts.byRule[id] || 0);
-          var on = isAll
-            ? state.anomalyRules.length === ANOMALY_RULES.length
-            : state.anomalyRules.indexOf(id) >= 0;
-          var noun = isAll ? '全部异常' : anomalyRuleLabel(id);
-          var label = noun + ' ' + formatInt(n) + ' 条 · ' + (on ? '当前只看这些 · 点击取消' : '当前未启用 · 点击只看这些');
-          button.querySelector('.anomaly-count').textContent = formatInt(n);
+          var on;
+          var n;
+          var noun;
+          var unit;
+          var label;
+          if (isNone) {
+            // 重置 carries no number. The other buttons answer "how much would this keep", and
+            // that question is meaningless for a control that keeps whatever the row above says
+            // — the row above's own count is already on the window bar.
+            //
+            // 多选 counts towards "is this row at its default" because it is: the axis opens in
+            // 单选, and 多选 changes what every other button on this row does when pressed. A row
+            // with 多选 on is not the state 重置 describes, so it must not claim to be it — and
+            // 重置 is the only control that turns 多选 off, so a reader told the row is already at
+            // its default would never press the one button that would put it back.
+            on = state.anomaly.rules.length === 0 && state.anomaly.mode !== 'multi';
+            noun = ANOMALY_NONE_LABEL;
+            label = noun + ' · ' + (on ? '已是默认状态 · 表格按上一行的条件筛选'
+              : '点击回到默认状态 · 表格按上一行的条件筛选');
+            n = null;
+          } else if (isAll) {
+            on = state.anomaly.rules.length === ANOMALY_RULES.length;
+            n = counts.any;
+            noun = '全部异常';
+            unit = '条';
+            label = ruleLabelFor(noun, n, unit, on);
+          } else {
+            on = state.anomaly.rules.indexOf(id) >= 0;
+            n = counts.byRule[id] || 0;
+            noun = anomalyRuleLabel(id);
+            unit = counts.unit[id] || '条';
+            label = ruleLabelFor(noun, n, unit, on);
+          }
+          var cell = button.querySelector('.anomaly-count');
+          if (cell) cell.textContent = formatInt(n) + ' ' + unit;
           button.setAttribute('aria-pressed', on ? 'true' : 'false');
           button.setAttribute('aria-label', label);
           button.setAttribute('title', label);
-          button.classList.toggle('is-empty', n === 0);
+          button.classList.toggle('is-empty', n !== null && n === 0);
         }
+      }
+
+      /**
+       * One rule's button name, built from the same two facts the number is.
+       *
+       * The unit is printed next to the number rather than assumed: 条 for a rule about a
+       * record, 轮 for a rule about a turn. A bare number cannot carry that difference, and a
+       * reader who cannot tell them apart is exactly who reads 1,244 条 as 1,244 unanswered
+       * replies when the session was broken thirteen times.
+       */
+      function ruleLabelFor(noun, n, unit, on) {
+        return noun + ' ' + formatInt(n) + ' ' + unit + ' · '
+          + (on ? '当前只看这些 · 点击取消' : '当前未启用 · 点击只看这些');
       }
 
       function onAnomalyToggle(ruleId) {
         var next;
         if (ruleId === null) {
-          next = state.anomalyRules.length === ANOMALY_RULES.length ? [] : ANOMALY_RULE_IDS.slice();
-        } else {
-          next = state.anomalyRules.filter(function (id) {
+          // 全部异常: every rule, or none of them.
+          next = state.anomaly.rules.length === ANOMALY_RULES.length ? [] : ANOMALY_RULE_IDS.slice();
+          state.anomaly.last = next.length ? null : state.anomaly.last;
+        } else if (state.anomaly.mode === 'multi') {
+          // Union mode. A click adds the rule, or takes it back off — unless it was the last
+          // one standing, because a filter that refuses to turn off is a filter nobody can leave.
+          next = state.anomaly.rules.filter(function (id) {
             return id !== ruleId;
           });
-          if (next.length === state.anomalyRules.length) next = next.concat([ruleId]);
-          next.sort(function (a, b) {
-            return ANOMALY_RULE_IDS.indexOf(a) - ANOMALY_RULE_IDS.indexOf(b);
-          });
+          if (next.length === state.anomaly.rules.length) next = next.concat([ruleId]);
+          state.anomaly.last = ruleId;
+        } else if (state.anomaly.rules.length === 1 && state.anomaly.rules[0] === ruleId) {
+          next = [];
+          state.anomaly.last = null;
+        } else {
+          // Single mode is a replacement, not an addition: you asked for this rule, and this is
+          // what you get. Anything already ticked was a previous question, not a standing one.
+          next = [ruleId];
+          state.anomaly.last = ruleId;
         }
-        state.anomalyRules = next;
+        next.sort(function (a, b) {
+          return ANOMALY_RULE_IDS.indexOf(a) - ANOMALY_RULE_IDS.indexOf(b);
+        });
+        state.anomaly.rules = next;
+        if (next.length > 0) resetBaseFilters();
         resetWindowMode();
         render();
+      }
+
+      /**
+       * 多选 on or off.
+       *
+       * Turning it off has to leave exactly one rule standing, because the buttons are about to
+       * stop being able to say more than one at a time and a selection of three that the buttons
+       * now claim to be one is the mismatch this whole axis was moved to fix. The survivor is
+       * the rule the reader ticked last — the one they were looking at a moment ago — and not
+       * the first in table order, which would be an answer to a question they did not ask.
+       */
+      function onAnomalyMultiChange(checked) {
+        state.anomaly.mode = checked ? 'multi' : 'single';
+        if (!checked && state.anomaly.rules.length > 1) {
+          var last = state.anomaly.last;
+          state.anomaly.rules = [last && state.anomaly.rules.indexOf(last) >= 0
+            ? last
+            : state.anomaly.rules[0]];
+        }
+        if (state.anomaly.rules.length === 0) state.anomaly.last = null;
+        render();
+      }
+
+      /**
+       * Back to the default: no anomaly rule, and the table filtered by the row above.
+       *
+       * Deliberately not a toggle. 重置 is the state the page opens in, so a toggle would mean
+       * the second click on an already-active button silently filtered the list — the reader
+       * pressed "put it back" and got less of it. And deliberately it does not restore what the
+       * row above used to hold either: it is a reset, so the row above is already at its default
+       * and the table follows from there.
+       */
+      function onAnomalyReset() {
+        if (state.anomaly.rules.length === 0 && state.anomaly.mode !== 'multi') return;
+        // One assignment, not three. 多选 goes back to its default with it — 重置 means the
+        // default state, and 单选 is what this axis opens in; leaving a mode switch on is not a
+        // filter the reader would think to clear by pressing the button they just pressed.
+        state.anomaly = defaultAnomaly();
+        if (dom.anomalyMulti) dom.anomalyMulti.checked = false;
+        resetWindowMode();
+        render();
+      }
+
+      /**
+       * The row above, put back to its default: every kind, no query, no strip selection, no range.
+       *
+       * Written once and called from both directions into anomaly mode, because the controls and
+       * the state have to move together — setting `state.kinds` without `syncKindButtons()` is
+       * how the axis ends up showing 「用户」 while the table is not filtered by it.
+       *
+       * This is also the one writer of the base axes' defaults, which is why clearFilters() below
+       * calls it rather than repeating the assignments. The two used to be parallel functions with
+       * the same name in spirit and different contents: clearFilters() left state.overviewSelection
+       * alone, and that field is read by visibleEntries() — so the 「清除筛选」 button in the empty
+       * ledger cleared the kinds, the query, the anomaly rules and the range, and the ledger stayed
+       * filtered by a brush on the strip that the reader had just pressed a button to get rid of.
+       */
+      function resetBaseFilters() {
+        state.kinds = KIND_ORDER.slice();
+        state.query = '';
+        dropOverviewSelection();
+        clearTimeRange();
+        if (dom.searchInput) dom.searchInput.value = '';
+        syncKindButtons();
+      }
+
+      /**
+       * Keeps the page honest about which filter system is in force.
+       *
+       * The controls for the inactive one are made inert as well as dimmed, because a control
+       * that accepts a click and then changes nothing on screen is the defect that put this
+       * axis where it was — reintroducing it one line away would be worse than the original.
+       * 会话 / 上下文代 / 刷新 carry no marker: they choose which session is on screen, not which
+       * records of it, so they have to keep working while an anomaly rule is ticked.
+       */
+      function syncAnomalyMode(counts) {
+        var on = state.anomaly.rules.length > 0;
+        document.body.setAttribute('data-anomaly-mode', on ? 'on' : 'off');
+        var scopes = document.querySelectorAll('[data-filter-scope]');
+        for (var i = 0; i < scopes.length; i += 1) scopes[i].inert = on;
+        // The checkbox is state too, and a poll re-renders from state. Writing it here means
+        // turning 多选 off by hand cannot leave it drawn on while the buttons are single again.
+        if (dom.anomalyMulti) dom.anomalyMulti.checked = state.anomaly.mode === 'multi';
+        if (!dom.anomalyNote) return;
+        dom.anomalyNote.hidden = !on;
+        if (on) {
+          // Two rules on means the per-rule numbers do not add up to the list — one record can
+          // trip both — so the reader needs the total for *their* selection. It used to be
+          // answered with 合计见「全部异常」, which is the union of all four rules: for a stack of
+          // two it pointed at a number 1,300 rows larger than what was on screen. The total is
+          // counted instead, and it is the length of the ledger under these buttons.
+          //
+          // 叠加 is 多选's word. In 单选 the only way more than one rule is ever on is 全部异常,
+          // which is not the reader stacking anything, so it is described as all of them being in
+          // force rather than as a stack they did not build.
+          var n = state.anomaly.rules.length;
+          var stacked = n > 1
+            ? (state.anomaly.mode === 'multi'
+              ? ' · 已叠加 ' + formatInt(n) + ' 条规则 · 合计 ' + formatInt(counts.selected) + ' 条'
+              : ' · 全部 ' + formatInt(n) + ' 条规则同时生效 · 合计 ' + formatInt(counts.selected) + ' 条')
+            : '';
+          dom.anomalyNote.textContent = '异常筛选已开启 · 类型、搜索、时间区间与总览已回到默认且不参与 · 点「'
+            + ANOMALY_NONE_LABEL + '」回到默认筛选' + stacked;
+        }
       }
 
       function syncKindButtons() {
@@ -6180,6 +8543,15 @@
         stopPolling();
         pollTimer = window.setInterval(function () {
           if (document.hidden) return;
+          // A table that is still being built is not a table this tick may replace. An 全部 window
+          // over 18,924 rows takes about 4 s to lay out — longer than this interval — so letting
+          // every tick through would restart the build before it reached the end, and the reader
+          // would watch the count reset from 3,000 back to 0 forever. The tick is remembered
+          // instead, and flushDeferredPoll() runs it once the build finishes.
+          if (ledgerBuilding()) {
+            pollDeferred = true;
+            return;
+          }
           fetchSessions();
           fetchTrajectory(false);
         }, POLL_INTERVAL);
@@ -6193,6 +8565,44 @@
       }
 
       function wire() {
+        // Nothing re-measured the band when the window changed shape. On a session whose payload has
+        // stopped growing every poll is a 304 and render() never runs, so a resize that wrapped the
+        // type row or the 异常 row left the pinned strips sitting at the old width — until new
+        // records happened to arrive, which on a finished session is never.
+        window.addEventListener('resize', scheduleStickyOffsets);
+
+        // The inspector's own scroll and resize listeners, separate from the sticky offsets above
+        // because they answer a different question: not how tall the pinned strips are, but
+        // whether this panel has left the viewport. Passive because nothing here scrolls the page
+        // from inside the handler — the one scrollBy lives in resetInspectorDock(), which runs
+        // from this same callback and is the only place a read of scroll becomes a write of it.
+        window.addEventListener('scroll', scheduleInspectorDock, { passive: true });
+        window.addEventListener('resize', scheduleInspectorDock);
+
+        // Two buttons, one job each, and neither writes the field itself — each names the state its
+        // click goes to and hands it to the one writer. The single button this replaced cycled
+        // folded -> half -> expanded -> folded, which was correct and still wrong to use: reaching
+        // 「半高」 from 「完全展开」 took two clicks and a reader had to know which click they were
+        // on. What each button does is now in its own aria-label and nowhere else.
+        dom.inspectorMinimize.addEventListener('click', function () {
+          setInspectorDock(state.inspectorDock === 'folded' ? inspectorFoldReturnDock() : 'folded');
+        });
+        dom.inspectorExpand.addEventListener('click', function () {
+          setInspectorDock(state.inspectorDock === 'full' ? 'docked' : 'full');
+        });
+
+        // The grip, beside the handle rather than instead of it: the handle chooses which of the
+        // two pinned heights the panel has, the grip chooses how tall that one is. pointercancel is
+        // registered alongside pointerup because a drag that ends any other way — the browser
+        // taking the capture, a second touch — would otherwise leave the drag object alive and
+        // every later pointermove would resize a panel nobody is touching.
+        dom.inspectorResize.addEventListener('pointerdown', onInspectorResizeDown);
+        dom.inspectorResize.addEventListener('pointermove', onInspectorResizeMove);
+        dom.inspectorResize.addEventListener('pointerup', onInspectorResizeUp);
+        dom.inspectorResize.addEventListener('pointercancel', onInspectorResizeUp);
+
+        applyInspectorDock();
+
         dom.followBtn.addEventListener('click', function () {
           setFollow(!state.followLatest);
         });
@@ -6282,17 +8692,34 @@
           render();
         });
 
+        // D44: the ledger's two-ends jump. Wired here with everything else, once — the observer it
+        // creates outlives every rebuild of #ledger, which is why its sentinel is a sibling of
+        // #ledger rather than a child.
+        buildLedgerJump();
+
         // Built before it is bound, so the buttons and their handlers come from the same
         // table and cannot be two lists that drift.
         buildAnomalyButtons();
         var anomalyButtons = dom.anomalyControls.querySelectorAll('.anomaly-btn');
         for (var a = 0; a < anomalyButtons.length; a += 1) {
           anomalyButtons[a].addEventListener('click', function () {
-            // Read the pressed state at click time rather than closing over it: the buttons
+            // Read which button this is at click time rather than closing over it: the buttons
             // are re-synced on every poll, and a captured flag goes stale between the render
             // and the click.
+            if (this.hasAttribute('data-anomaly-none')) {
+              onAnomalyReset();
+              return;
+            }
             var id = this.getAttribute('data-anomaly-rule');
             onAnomalyToggle(id || null);
+          });
+        }
+
+        // `change`, not `click`: a checkbox operated by keyboard fires change and nothing else,
+        // and this control has to work the same way for both.
+        if (dom.anomalyMulti) {
+          dom.anomalyMulti.addEventListener('change', function () {
+            onAnomalyMultiChange(this.checked);
           });
         }
 

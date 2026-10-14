@@ -28,16 +28,71 @@ const COMPACTION_TURN_SUFFIX = ':compaction';
 // Enough of a file to read its opening line. A generation marker lives on the first row, so
 // deciding whether a snapshot belongs to the lineage never needs more than this.
 const GENERATION_PROBE_BYTES = 64 * 1024;
-const LIST_PEEK_BYTES = 256 * 1024;
+/**
+ * Bytes of `messages.jsonl` the session list reads to derive one label and one set of counters.
+ *
+ * Kept at the generation probe's budget on purpose: the generation marker lives on the first row,
+ * so a list that needed more than that to find one would be a list wanting the whole session.
+ *
+ * The counters this buys are approximate by design (see countRolesInPrefix), so a narrower prefix
+ * costs accuracy, not correctness — 256 KB was reading four times what the label needed, on every
+ * cache miss.
+ *
+ * The last clause used to end "for counts nobody treats as exact", and that is what D45 found
+ * false: the page printed the message count in the session picker (`（3 分钟前 · 10 条）`), so it
+ * was treated as exact. On a session whose active file is 1 MB, the first 64 KB held 10 messages
+ * out of 23,642 — a number that was wrong by three orders of magnitude and carried no hint of it.
+ * So the prefix stays bounded and the counters it buys are only REPORTED when the prefix was the
+ * whole file; see {@link describeSession}. Counting exactly is not available: the list reads the
+ * active file, and an exact count there would still miss the rest of the lineage.
+ */
+const LIST_PEEK_BYTES = 64 * 1024;
 const MAX_FIELD_CHARS = 20000;
 const MAX_SUMMARY_CHARS = 160;
 const MAX_ARGUMENT_BYTES = 32000;
 const MAX_LABEL_CHARS = 60;
 const MAX_RAW_BYTES = 65536;
-const LIST_CACHE_TTL_MS = 1000;
+/**
+ * How long the session list may keep its scan of the store before walking it again.
+ *
+ * This has to stay at or above the page's poll interval, and that relationship — not this
+ * number — is the invariant tests/verify-list-cache.mjs holds. Below the interval the cache
+ * cannot survive a single poll: every tick expires it, so the list re-walks the session tree
+ * and reopens the runtime database on every tick. Measured on this machine, that was most of
+ * the 16 GB this process read in 68 minutes, and the allocation behind it held the process at
+ * a 1.2-2.5 GB high-water mark for as long as the page stayed open.
+ */
+const LIST_CACHE_TTL_MS = 3000;
 const SESSION_CACHE_TTL_MS = 5000;
 const SESSION_CACHE_ENTRIES = 80;
 const TRAJECTORY_CACHE_ENTRIES = 4;
+/**
+ * Upper bound on the parsed generation rows kept resident, in bytes.
+ *
+ * The whole-session cache above stores serialized bodies; this one stores parsed object
+ * graphs, which cost several times their source text. Measured on this machine: JSON.parse
+ * retains 1.36x the text of the emitted payload, and that is a floor — the payload has
+ * already had its message bodies stripped by splitRawRecords, so the rows graph is larger.
+ * A 95 MB lineage lands somewhere in 130-290 MB.
+ *
+ * The trade is deliberate: it converts roughly 350 MB of allocation every 2.5 s into one
+ * resident cost. Pinned by tests/verify-parsed-rows.mjs.
+ */
+const PARSED_ROWS_CACHE_BYTES = 256 * 1024 * 1024;
+/**
+ * Heap charged to one cache entry per source byte read. V8 cannot report an object graph's
+ * size, so a byte budget needs a proxy.
+ *
+ * Measured on this machine's own lineage: 95.3 MB of messages.jsonl retained 116 MB of heap
+ * after two forced collections, i.e. 1.22x the source. 2x leaves headroom over that while
+ * still erring on the side of over-counting, because a proxy that under-counts would let the
+ * cache grow past its own budget without noticing.
+ *
+ * It was 3x before, and that was wrong in the direction that matters: 95.3 MB x 3 charged
+ * 286 MB against a 256 MB budget, so the LRU evicted entries it had room for in reality and
+ * re-parsed them on the next poll. The budget is only as good as this number.
+ */
+const PARSED_ROWS_HEAP_PER_SOURCE_BYTE = 2;
 const SESSION_STORE_TOKEN = '<session-store>';
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 const ROLE_PATTERN = /"role"\s*:\s*"(user|assistant|toolResult|custom)"/g;
@@ -788,39 +843,67 @@ export function toolCallSummary(name, args) {
 }
 
 /**
- * Moves `raw` off every record into an index-keyed map.
+ * Moves the raw-message locator off every record into an index-keyed map.
  *
- * On a real session the untouched message is about two thirds of the payload, and the page
- * reads it for exactly one record at a time: the inspector's raw tab, one clipboard copy,
- * one handoff. Carrying it on every row pays that weight on every poll and buys nothing
- * until a row is actually opened, so it leaves the bulk response and is fetched per record
- * instead.
+ * Two things used to happen here and only one of them was load-bearing.
  *
- * `rawOmitted` deliberately stays on the row. Whether a message was too large to carry at
- * all is a fact the list itself has to be able to state — it is one boolean per row, and
- * it is what lets the inspector say "omitted" instead of silently showing something else.
+ * The message itself was carried on every row and taken off again by this function. That is
+ * what kept the bulk response small, and it stays true. What did not survive scrutiny is how
+ * the size was decided: buildRawPayload() had to JSON.stringify the message to measure it, so
+ * every rebuild serialized about 100 MB of message bodies to compare them against a 64 KB cap
+ * and then threw the string away — for a body the page reads for one record at a time, if at
+ * all. Pinned by tests/verify-raw-lazy.mjs.
+ *
+ * What the row carries now is the position of the message it came from. One row can produce
+ * several records (an assistant message yields its thinking, its text and each tool call),
+ * and they all answer with the same message, so the locator is per row, not per segment.
  *
  * Records are carried per turn, not as one flat list, so this walks the turns.
  *
  * @param {Array<Record<string, any>>} turns
- * @returns {Map<number, unknown>}
+ * @returns {Map<number, number>}
  */
 export function splitRawRecords(turns) {
-  /** @type {Map<number, unknown>} */
+  /** @type {Map<number, number>} */
   const raws = new Map();
   if (!Array.isArray(turns)) return raws;
   for (const turn of turns) {
     if (!turn || typeof turn !== 'object' || !Array.isArray(turn.records)) continue;
     for (const record of turn.records) {
-      if (!record || typeof record !== 'object' || !('raw' in record)) continue;
+      if (!record || typeof record !== 'object' || !('rawRow' in record)) continue;
       const index = Number(record.index);
-      if (Number.isInteger(index) && index > 0) raws.set(index, record.raw);
-      delete record.raw;
+      // Not Number(record.rawRow): Number(null) is 0, so a record whose locator is absent
+      // would resolve to the first row and answer with the wrong message.
+      const rowIndex = record.rawRow;
+      if (Number.isInteger(index) && index > 0 && typeof rowIndex === 'number' && Number.isInteger(rowIndex) && rowIndex >= 0) {
+        raws.set(index, rowIndex);
+      }
+      delete record.rawRow;
     }
   }
   return raws;
 }
 
+/**
+ * A record the runtime keeps for itself: written to the session, never shown, never sent.
+ *
+ * Mirrors the runtime's own `isHostOnlyMessage()` — a `custom`-role record whose
+ * `hostMetadata.providerVisibility` is `'omit'`. That predicate is what
+ * `projectAgentMessagesForModel()` filters on before the outbound request is built, so it is
+ * the field to read: matching a list of `customType` strings instead would go stale the first
+ * time the runtime adds another host-only record type.
+ *
+ * @param {unknown} message
+ * @returns {boolean}
+ */
+export function isHostOnlyMessage(message) {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) return false;
+  const record = /** @type {Record<string, any>} */ (message);
+  if (record.role !== 'custom') return false;
+  const metadata = record.hostMetadata;
+  return !!metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    && metadata.providerVisibility === 'omit';
+}
 /**
  * Builds the frozen `/api/trajectory` payload from already-parsed rows.
  * @param {{ session: { id: string, createdAtMs?: number | null }, rows: Array<Record<string, any>>, sizeBytes?: number, truncated?: boolean, redact?: (value: string) => string, generations?: Array<Record<string, any>>, generation?: number | null, orphans?: Array<{ generation: number, fileName: string }> }} input
@@ -883,7 +966,8 @@ export function buildTrajectoryPayload(input) {
     return turn;
   };
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
     const message = row && typeof row.message === 'object' && row.message !== null ? row.message : {};
     const source = /** @type {Record<string, any>} */ (message);
     const role = typeof source.role === 'string' ? source.role : 'unknown';
@@ -910,7 +994,6 @@ export function buildTrajectoryPayload(input) {
       if (turn.endedAt === null || timestamp > turn.endedAt) turn.endedAt = timestamp;
     }
 
-    const raw = buildRawPayload(source, redact);
     const usage = normalizeUsage(source.usage);
     if (usage) {
       stats.tokens.input += usage.input;
@@ -955,8 +1038,14 @@ export function buildTrajectoryPayload(input) {
       api: typeof source.api === 'string' ? source.api : null,
       stopReason: typeof source.stopReason === 'string' ? source.stopReason : null,
       isError: source.isError === true ? true : source.isError === false ? false : null,
-      raw: raw.value,
-      rawOmitted: raw.omitted,
+      // Whether the runtime keeps this record for itself. Carried as one boolean so the page
+      // can select on it (the 异常 axis has a rule for it) without the page having to know the
+      // runtime's customType names, and without the record leaving the payload — dropping these
+      // rows would renumber every record after them, because `index` counts emitted rows.
+      internalOnly: isHostOnlyMessage(source),
+      // Where the untouched message lives, not the message itself. /raw follows this back
+      // when a reader actually opens the record; nothing else reads it.
+      rawRow: rowIndex,
       textTruncated: false,
     };
 
@@ -1385,7 +1474,7 @@ function redactStructure(value, redact, depth = 0) {
  * @param {Record<string, any>} message
  * @param {(value: string) => string} redact
  */
-function buildRawPayload(message, redact) {
+export function buildRawPayload(message, redact) {
   if (!message || typeof message !== 'object') return { value: null, omitted: true };
   let serialized = '';
   try {
@@ -1497,6 +1586,226 @@ export function trajectoryCacheKey(entry, identity, binding, filter) {
   const gen = filter === null || filter === undefined ? 'all' : String(filter);
   return `${entry.dir}|gen=${gen}|${lineage}|${entry.sizeBytes}|${entry.lastActiveAt}|${identity.catalogBytes ?? ''}|${bind}`;
 }
+/**
+ * The `?since=` cursor, or null when there is not a usable one.
+ *
+ * An absent, blank, non-integer or negative value is not an error: it is a page that has
+ * nothing yet, and a page with nothing yet needs the whole payload. Turning that into a
+ * 400 would put the first poll of every session on an error path for a question with a
+ * perfectly good default answer.
+ * @param {string | null | undefined} raw
+ * @returns {number | null}
+ */
+export function parseSince(raw) {
+  if (raw === null || raw === undefined || String(raw).trim() === '') return null;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) return null;
+  return value;
+}
+
+/**
+ * The part of a payload the page does not have: every record after the cursor.
+ *
+ * `stats` and `session` travel whole in every delta. `stats` because it is an accumulator,
+ * every counter in it the result of walking all the rows, so a tail could not be added to
+ * it without the page re-deriving the server's own arithmetic. `session` because it is a few
+ * hundred bytes and answering it from the previous copy would make each payload depend on
+ * a history the server does not keep.
+ *
+ * A turn travels whole. Its turn-level fields were always sent whole — a turn's `closed` flips as
+ * the conversation moves on, and 无答复 is decided by it — but its `records` used to be cut down
+ * to the ones after the cursor, and that cut is what dropped a tool call's duration.
+ *
+ * `durationMs` and the result preview are written onto the call record *after* it was first
+ * pushed, when its result message arrives. So the record that gains a value is an OLD one, with
+ * an index below the cursor: it was never in the tail, and the row the reader was already looking
+ * at stayed blank until they refreshed. Measured by running both halves: with the cut in place
+ * the page holds `durationMs: null` while the server holds 1533.
+ *
+ * The fix is to cut at turn granularity — a turn with anything new after the cursor travels whole
+ * — and the cost is bounded rather than open-ended, because `?since=` never saved the server any
+ * work to begin with: the whole body is serialized either way for the cache entry and `/raw`. This
+ * only moves bytes on the wire and work into the page's `JSON.parse`.
+ *
+ * A call and its result sit in the SAME turn — a turn opens on a prompt and closes when the agent
+ * finishes responding, so the tool cycle is inside one span. That is what makes turn granularity
+ * sufficient rather than a narrowing: the turn that gains a record is the turn that gets written
+ * back onto. A result that landed in a later turn than its call would still wait for a refresh,
+ * and that is the one shape this does not cover.
+ *
+ * Returns null when a delta would not be a faithful answer; that is the caller's signal to
+ * send the whole payload instead. It happens when the payload carries no records, and when
+ * the cursor is past the end. The second is the page being *ahead* of the server, which is
+ * what a generation switch looks like from here — and a tail from there is empty, so
+ * serving it would leave the page believing the server has nothing to add.
+ *
+ * @param {any} payload
+ * @param {number} since
+ * @returns {any | null}
+ */
+export function buildDeltaPayload(payload, since) {
+  if (!Number.isInteger(since) || since < 0) return null;
+  const turns = payload && Array.isArray(payload.turns) ? payload.turns : [];
+  if (turns.length === 0) return null;
+  let upTo = 0;
+  for (const turn of turns) {
+    const records = turn && Array.isArray(turn.records) ? turn.records : [];
+    for (const record of records) {
+      if (typeof record.index === 'number' && record.index > upTo) upTo = record.index;
+    }
+  }
+  if (since > upTo) return null;
+  const tail = [];
+  // `records` counts what is NEW, not what travels. A turn that ships whole with 300 records
+  // contributes 1 here. The page reads `delta.upTo` for its next cursor and never reads this
+  // number, but three guards pin it as the count of additions — and that is what it is, so the
+  // count and the cut are computed apart instead of the count inheriting the cut.
+  let records = 0;
+  for (const turn of turns) {
+    const all = turn && Array.isArray(turn.records) ? turn.records : [];
+    let fresh = 0;
+    for (const record of all) {
+      if (typeof record.index === 'number' && record.index > since) fresh += 1;
+    }
+    if (fresh === 0) continue;
+    records += fresh;
+    tail.push({ ...turn, records: all.slice() });
+  }
+  return {
+    session: payload.session,
+    stats: payload.stats,
+    turns: tail,
+    delta: { since, upTo, records },
+  };
+}
+
+/**
+ * @typedef {{ rows: Array<Record<string, any>>, skipped: number, size: number, read: number, empty: boolean, truncated: boolean }} ParsedRows
+ */
+
+/**
+ * Cache key for one generation file's parsed rows.
+ *
+ * Built from what the filesystem says right now, never from the catalog. The catalog's
+ * byteLength is a snapshot — this file documents that as going stale, and the active file
+ * grows past it between polls — so a key built from it would eventually serve a stale parse.
+ *
+ * The key names the full path, not the basename: every session has a `messages.jsonl`, so a
+ * basename key lets two sessions' identical files collide.
+ *
+ * `limit` participates because readHead truncates at it, and whether the file was truncated is
+ * part of what this entry holds.
+ *
+ * @param {string} filePath
+ * @param {number} size
+ * @param {number} mtimeMs
+ * @param {number} limit
+ * @returns {string}
+ */
+export function parsedRowsKey(filePath, size, mtimeMs, limit) {
+  return `${filePath}|${size}|${mtimeMs}|${limit}`;
+}
+
+/**
+ * LRU over parsed generation rows, bounded by bytes.
+ *
+ * Bounded by bytes rather than entries because entries say nothing about volume: one
+ * generation file is 40 KB and the next is 10 MB. A single entry larger than the whole budget
+ * is not stored at all — it would evict everything else and still miss every time.
+ *
+ * @param {number} budget
+ */
+export function createParsedRowsCache(budget) {
+  /** @type {Map<string, { value: ParsedRows, size: number }>} */
+  const entries = new Map();
+  let bytes = 0;
+  return {
+    get bytes() { return bytes; },
+    get size() { return entries.size; },
+    /**
+     * @param {string} key
+     * @returns {ParsedRows | null}
+     */
+    get(key) {
+      const hit = entries.get(key);
+      if (hit === undefined) return null;
+      // Re-reading is the only signal that a file is still hot, so it refreshes recency.
+      entries.delete(key);
+      entries.set(key, hit);
+      return hit.value;
+    },
+    /**
+     * @param {string} key
+     * @param {ParsedRows} value
+     * @param {number} size
+     * @returns {number}
+     */
+    set(key, value, size) {
+      const previous = entries.get(key);
+      if (previous !== undefined) {
+        bytes -= previous.size;
+        entries.delete(key);
+      }
+      if (size > budget) return bytes;
+      entries.set(key, { value, size });
+      bytes += size;
+      while (bytes > budget && entries.size > 1) {
+        const oldest = entries.keys().next();
+        if (oldest.done) break;
+        const victim = entries.get(oldest.value);
+        entries.delete(oldest.value);
+        bytes -= victim ? victim.size : 0;
+      }
+      return bytes;
+    },
+    clear() {
+      entries.clear();
+      bytes = 0;
+    },
+  };
+}
+
+/**
+ * One generation file's rows, from the cache when the filesystem still agrees with the key.
+ *
+ * Extracted from the route so a test can run the real step twice and compare: a cache hit
+ * that is even slightly different from a cold read is the one failure this cache may not
+ * have, and it is invisible to any test that does not run this function.
+ *
+ * Throws whatever readHead throws; the caller owns the error response, because the route
+ * needs to answer 500 and the test needs the throw.
+ *
+ * @param {ReturnType<typeof createParsedRowsCache>} cache
+ * @param {string} filePath
+ * @param {number} limit
+ * @returns {Promise<ParsedRows>}
+ */
+export async function loadParsedRows(cache, filePath, limit) {
+  // Stat for the key rather than trusting the catalog, for the same reason the read limit is
+  // not taken from it: the active file grows past its recorded size between polls. If the file
+  // changes between this stat and readHead the entry ends up keyed on a size it does not
+  // match, and the next poll — which stats again — misses and re-reads. The race can only cost
+  // a redundant read; it can never serve a stale parse, because a different size is a
+  // different key.
+  const current = await stat(filePath);
+  const key = parsedRowsKey(filePath, current.size, current.mtimeMs, limit);
+  const hit = cache.get(key);
+  if (hit !== null) return hit;
+
+  const head = await readHead(filePath, limit);
+  const parsed = parseMessagesJsonl(head.text);
+  const value = {
+    rows: parsed.rows,
+    skipped: parsed.skipped,
+    size: head.size,
+    read: head.read,
+    empty: head.text === '',
+    // Truncated means our cap cut the read, nothing else.
+    truncated: truncatedByCap(head.size, limit),
+  };
+  cache.set(key, value, Math.ceil(head.size * PARSED_ROWS_HEAP_PER_SOURCE_BYTE));
+  return value;
+}
 
 /**
  * Sends an already-serialized JSON body. Unlike {@link sendJson} it supports revalidation:
@@ -1561,9 +1870,15 @@ export async function start(context) {
    * but is only ever read for one record at a time, so keeping it beside the body means
    * the poll transfers the small payload and the record that gets opened still costs
    * nothing extra.
-   * @type {Map<string, { at: number, etag: string, body: string, raws: Map<number, unknown> }>}
+   * @type {Map<string, { at: number, etag: string, body: string, raws: Map<number, number>, rows: Array<Record<string, any>> }>}
    */
   const trajectoryCache = new Map();
+  /**
+   * Parsed generation rows, keyed by path+size+mtime+limit. Beside trajectoryCache, not
+   * inside it: a whole-session hit still short-circuits before this is touched at all, so
+   * the two caches never answer for each other. Pinned by tests/verify-parsed-rows.mjs.
+   */
+  const parsedRows = createParsedRowsCache(PARSED_ROWS_CACHE_BYTES);
 
   const loadClientEntry = async () => {
     if (clientEntry) return clientEntry;
@@ -1580,6 +1895,26 @@ export async function start(context) {
     return entries;
   };
 
+  /**
+   * Titles and kinds for the visible slice, cached on the same budget as the walk above.
+   *
+   * readSessionTitles opens the runtime database on every call, and the list route calls it once
+   * per poll for rows that only change when somebody renames a session. Raising the walk's TTL
+   * without this would still reopen a 700 MB store every 2.5 s forever, so the two caches answer
+   * the same poll or neither does.
+   * @type {{ at: number, key: string, map: Map<string, { title: string | null, kind: string | null }> }}
+   */
+  let titleCache = { at: 0, key: '', map: new Map() };
+  /** @param {readonly string[]} ids */
+  const sessionTitles = async (ids) => {
+    const key = ids.join('');
+    const now = Date.now();
+    if (key === titleCache.key && now - titleCache.at < LIST_CACHE_TTL_MS) return titleCache.map;
+    const map = await readSessionTitles(location.root, ids);
+    titleCache = { at: now, key, map };
+    return map;
+  };
+
   const describeSession = async (entry) => {
     const cacheKey = `${entry.dir}|${entry.sizeBytes}|${entry.lastActiveAt}`;
     const cached = descriptorCache.get(cacheKey);
@@ -1589,23 +1924,33 @@ export async function start(context) {
     let peek = { messages: 0, userMessages: 0, assistantMessages: 0, toolResults: 0, toolCalls: 0, thinkingBlocks: 0, turns: 0 };
     let label = null;
     let startedAt = identity.createdAtMs;
+    // Whether the prefix was the whole file, and so whether its counters mean what their names say.
+    // False until a read proves otherwise: a failed read has counted nothing at all, and reporting
+    // its zeros as 「0 条」 would be the same lie with a smaller number.
+    let peekIsWhole = false;
     try {
       const head = await readHead(join(entry.dir, 'messages.jsonl'), LIST_PEEK_BYTES);
       peek = countRolesInPrefix(head.text);
       label = findFirstUserLabel(head.text, redact);
       const firstTimestamp = firstTimestampIn(head.text);
       if (firstTimestamp !== null) startedAt = firstTimestamp;
+      peekIsWhole = !truncatedByCap(head.size, LIST_PEEK_BYTES);
     } catch (error) {
       context.logger.warn('miniapp.trajectory.read_error', { reason: 'peek_failed', code: errorCode(error) });
     }
     const value = {
       id: identity.id,
       label: label ?? `会话 ${String(identity.id).slice(4, 12)}`,
-      messageCount: peek.messages,
+      // A prefix count is a prefix count. Reported as the session's message count it is simply
+      // untrue, so when the prefix was not the whole file these are absent rather than approximate —
+      // and the page's job is to print nothing rather than to print a number it cannot stand behind.
+      messageCount: peekIsWhole ? peek.messages : null,
       startedAt,
       lastActiveAt: entry.lastActiveAt,
+      // The active file's size, which is exactly what it is: `sizeBytes` is not a lineage total
+      // here, and /api/trajectory's is. Same name, different scope. Pinned by tests/verify-list-cache.mjs.
       sizeBytes: entry.sizeBytes,
-      turnCount: peek.turns,
+      turnCount: peekIsWhole ? peek.turns : null,
       cacheId,
     };
     descriptorCache.set(cacheKey, { at: Date.now(), value });
@@ -1691,8 +2036,7 @@ export async function start(context) {
     const visible = entries.slice(0, limit);
     // Real titles from the runtime database; sub-agent and cron sessions get a kind badge so
     // the picker never presents them as if they were the user's conversation.
-    const titles = await readSessionTitles(
-      location.root,
+    const titles = await sessionTitles(
       visible.map((entry) => decodeSessionIdFromDirName(basename(entry.dir))).filter(Boolean),
     );
     for (const entry of visible) {
@@ -1815,6 +2159,12 @@ export async function start(context) {
       }
       // No validator from the page (first load, or a fresh tab): reuse the body we already
       // built instead of re-reading and re-parsing the files to rebuild the same bytes.
+      // No `?since=` handling here, and that is not an oversight. A page that carries a
+      // cursor carries the validator it was taken against, so a request that reaches this
+      // line with a cursor means the session changed — which is the branch below. Cutting
+      // a tail out of a cached payload would also mean holding that payload in memory, and
+      // this cache deliberately does not: it holds the serialized bytes and the rows /raw
+      // needs, not the object graph the bytes came from.
       sendJsonBody(response, 200, cached.body, { etag, revalidate: true });
       return;
     }
@@ -1893,24 +2243,28 @@ export async function start(context) {
       // a file that was merely newer than its catalog entry. `readHead` already clamps to the real
       // stat size, so MAX_MESSAGE_BYTES bounds memory on its own.
       const limit = MAX_MESSAGE_BYTES;
-      let head;
+      /** @type {ParsedRows} */
+      let parsedFile;
       try {
-        head = await readHead(filePath, limit);
+        parsedFile = await loadParsedRows(parsedRows, filePath, limit);
       } catch (error) {
         context.logger.error('miniapp.trajectory.read_error', { reason: 'messages_unreadable', code: errorCode(error) });
         sendError(response, 500, 'trajectory_unreadable', '会话数据暂时无法读取');
         return;
       }
-      if (head.text === '') {
+      // Kept as a flag on the cached value rather than a log line at the read site: a file that
+      // parsed empty once will parse empty every time, and a hit must still say so.
+      if (parsedFile.empty) {
         context.logger.warn('miniapp.trajectory.read_error', { reason: 'empty_messages' });
       }
-      // Truncated means our cap cut the read, nothing else.
-      if (truncatedByCap(head.size, limit)) truncated = true;
-      readBytes += head.read;
-      const parsed = parseMessagesJsonl(head.text);
-      skippedTotal += parsed.skipped;
+      if (parsedFile.truncated) truncated = true;
+      readBytes += parsedFile.read;
+      skippedTotal += parsedFile.skipped;
       const keep = filter === null || filter === link.generation;
-      for (const row of parsed.rows) {
+      // The rows are shared with the cache and with every other request that read this file.
+      // Stamping the generation is the only write to them, and one filePath always maps to one
+      // generation, so it is idempotent. Pinned by tests/verify-parsed-rows.mjs.
+      for (const row of parsedFile.rows) {
         if (keep) {
           row[ROW_GENERATION] = link.generation;
           rows.push(row);
@@ -1953,6 +2307,10 @@ export async function start(context) {
 
     // Last thing before serializing, and the only place `raw` is ever touched: from here on
     // the body carries no message bodies at all.
+    // The locator map plus the rows it points into. Both are references: the rows are the
+    // same objects the parsed-rows cache holds, so this adds a map of numbers and an array of
+    // pointers rather than a second copy of the session. Keeping the array here also means
+    // /raw still answers after the parsed-rows cache has evicted the file.
     const raws = splitRawRecords(payload.turns);
 
     let body;
@@ -1962,13 +2320,19 @@ export async function start(context) {
       sendJson(response, 500, { error: 'trajectory_unserializable', message: '会话数据暂时无法读取' });
       return;
     }
-    trajectoryCache.set(cacheKey, { at: Date.now(), etag, body, raws });
+    trajectoryCache.set(cacheKey, { at: Date.now(), etag, body, raws, rows });
     while (trajectoryCache.size > TRAJECTORY_CACHE_ENTRIES) {
       const oldest = trajectoryCache.keys().next();
       if (oldest.done) break;
       trajectoryCache.delete(oldest.value);
     }
-    sendJsonBody(response, 200, body, { etag, revalidate: true });
+    // `?since=` asks for the tail. The whole body is serialized either way — the cache
+    // entry and /raw both need it — so this saves the transfer and the page's JSON.parse,
+    // and not the server's work. Any reading of "41 MB → a few KB, so polling got faster"
+    // has to carry that with it. Pinned by tests/verify-incremental.mjs.
+    const since = parseSince(url.searchParams.get('since'));
+    const delta = since === null ? null : buildDeltaPayload(payload, since);
+    sendJsonBody(response, 200, delta === null ? body : JSON.stringify(delta), { etag, revalidate: true });
   };
 
   /**
@@ -1995,11 +2359,17 @@ export async function start(context) {
       sendError(response, 503, 'trajectory_not_cached', '会话数据已释放，请重新加载');
       return;
     }
-    if (!cached.raws.has(wanted)) {
+    const rowIndex = cached.raws.get(wanted);
+    const row = rowIndex === undefined ? undefined : cached.rows[rowIndex];
+    if (rowIndex === undefined || !row || typeof row !== 'object') {
       sendError(response, 404, 'record_not_found', '找不到该记录');
       return;
     }
-    sendJson(response, 200, { index: wanted, raw: cached.raws.get(wanted) });
+    // The one place the untouched message is materialised, for one record, on request. The
+    // size verdict travels with it because the page has to be able to say "omitted" rather
+    // than silently show something else — see tests/verify-raw-lazy.mjs.
+    const built = buildRawPayload(row.message, redact);
+    sendJson(response, 200, { index: wanted, raw: built.value, omitted: built.omitted });
   };
 
   const handleDashboard = async (response) => {
@@ -2093,8 +2463,14 @@ export async function start(context) {
     if (disposal) return disposal;
     context.signal.removeEventListener('abort', onAbort);
     listCache = { at: 0, entries: null };
+    titleCache = { at: 0, key: '', map: new Map() };
     descriptorCache.clear();
     trajectoryCache.clear();
+    // The parsed-row cache is the largest of the three and was the only one not released here, so a
+    // disposed runtime kept a whole session's parsed rows alive — measured at roughly 43MB of heap
+    // still held for a 39MB session after dispose. It has the same clear() as the others and was
+    // simply missed; the line is here so the next cache added cannot repeat the omission quietly.
+    parsedRows.clear();
     clientEntry = null;
     disposal = close(server).then(() => undefined);
     return disposal;
