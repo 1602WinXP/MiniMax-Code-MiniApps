@@ -157,6 +157,21 @@ MUTATIONS = [
      "const key = ids.join('" + chr(0) + "');",
      "no shipped source file carries a NUL byte"),
 
+    # The other half of the same defect: the numbering on its own, with no file name for the first
+    # check to match against. These were labels on comments that explain themselves one line later,
+    # so no reader goes looking -- which is the reason they need a check rather than an argument.
+    # The layer numbers (L0-L6) are the same leak from the same missing document, so one pattern
+    # covers both and the assertion names them together.
+    ("a private defect number comes back into a shipped comment",
+     "/* ---------------- the ledger's two ends ---------------- */",
+     "/* ---------------- D44: the ledger's two ends ---------------- */",
+     "no shipped file carries a private defect or layer number"),
+
+    ("a private layer number comes back into a shipped comment",
+     "       * read rather than re-measured here: the band is filters, the overview is the strip, and",
+     "       * read rather than re-measured here: band is L2 and overview is L3, and",
+     "no shipped file carries a private defect or layer number"),
+
     # ---- 5. the cache stops being released ----
     # Anchored without any line ending on purpose. The first version of these two used \r\n because
     # server.mjs is CRLF in the working tree — and that is exactly the trap: it only matched because
@@ -217,6 +232,44 @@ MUTATIONS = [
      '"version": "1.1.0",',
      '"version": "1.2.0",',
      "the English README carries the shipped version"),
+
+    # ---- the snapshot the last run left, and the run that never looked at it ----
+    # All five break the cross-start check in tests/run.mjs, which existed on paper and did nothing:
+    # the snapshot was written only when it already existed, recorded the run's start rather than
+    # its end, and was never read. A hard kill mid-mutation therefore left the source mutated and
+    # the next run said nothing about it -- it reported whatever guard happened to read the mutated
+    # file, which reads as that guard being broken.
+
+    ("the harness never reads the snapshot it writes",
+     "readFileSync(SNAPSHOT, 'utf8')",
+     "'{}'",
+     "the harness reads the snapshot the previous run wrote"),
+
+    ("the startup check stops comparing per file",
+     "previous[rel] !== undefined && previous[rel] !== digest(rel)",
+     "false",
+     "the startup comparison is per file, against the digest that was recorded"),
+
+    # The old form: record the state the run STARTED with. Identical to the end state whenever
+    # nothing drifted, and a record of the mutation whenever something did.
+    ("the snapshot records the state the run started with",
+     "writeFileSync(SNAPSHOT, JSON.stringify(Object.fromEntries(SHIPPED.map((rel) => [rel, digest(rel)]))));",
+     "writeFileSync(SNAPSHOT, JSON.stringify(snapshotBefore));",
+     "the snapshot records the state the run ended with, and only a clean end"),
+
+    # Recording a drifted end is the one that hides the thing twice: the next run compares against
+    # the mutation and agrees with it.
+    ("the snapshot is written even when this run dirtied the source",
+     "if (drift.length === 0) {",
+     "if (drift.length >= 0) {",
+     "the snapshot records the state the run ended with, and only a clean end"),
+
+    # The two findings collapse into one line. Reads fine, costs the reader the only thing that
+    # distinguishes "this run broke it" from "it was already broken".
+    ("last run's residue is named exactly like this run's",
+     "'shipped files differ from the last run'",
+     "'shipped files restored'",
+     "this run's own residue and last run's residue are named differently"),
 ]
 
 
