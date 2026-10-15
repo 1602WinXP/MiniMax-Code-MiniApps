@@ -214,6 +214,29 @@ export async function start(context) {
   }
 
   /**
+   * Forget the configured sound, entirely, in one place.
+   *
+   * These fields move as a group, so a partial reset is a silent bug rather
+   * than a visible one: `soundPinned` holds a file NAME, and leaving it behind
+   * makes the app look locked to a track that is no longer configured, with no
+   * box ticked. Two of the three call sites predate that field and did exactly
+   * that -- they cleared the path and kept the pin.
+   *
+   * `soundVersion` always moves, because every consumer keys its cache on it and
+   * a cleared sound that reused the old version would keep rendering the track
+   * it just forgot.
+   */
+  function clearSound() {
+    state.soundPath = null;
+    state.soundInput = null;
+    state.soundRelative = false;
+    state.soundMode = 'single';
+    state.soundIndex = 0;
+    state.soundPinned = null;
+    state.soundVersion += 1;
+  }
+
+  /**
    * Re-point a relative sound path at this run's plugin root. Absolute paths are
    * left alone: the user chose a real location on their machine, and silently
    * clearing it would be worse than letting the load report it as gone.
@@ -224,10 +247,7 @@ export async function start(context) {
       const target = resolve(pluginRoot, state.soundInput);
       const rel = relative(pluginRoot, target);
       if (rel.startsWith('..') || isAbsolute(rel)) {
-        state.soundPath = null;
-        state.soundInput = null;
-        state.soundRelative = false;
-        state.soundVersion += 1;
+        clearSound();
         return;
       }
       state.soundPath = target;
@@ -235,10 +255,7 @@ export async function start(context) {
     try {
       await stat(state.soundPath);
     } catch {
-      state.soundPath = null;
-      state.soundInput = null;
-      state.soundRelative = false;
-      state.soundVersion += 1;
+      clearSound();
     }
   }
 
@@ -270,18 +287,12 @@ export async function start(context) {
    */
   async function snapshot() {
     const running = state.phase === 'running' && state.startedAt !== null;
-    const elapsedSec = running
-      ? Math.max(0, Math.floor((Date.now() - /** @type {number} */ (state.startedAt)) / 1000))
-      : 0;
     // remainingSec is frozen when a segment starts, so pausing and resuming keeps
-    // the leftover. A reminded segment has nothing left — reporting the full
-    // duration next to phase:"reminded" would be a self-contradictory snapshot.
-    const remainingSec =
-      state.phase === 'reminded'
-        ? 0
-        : running
-          ? Math.max(0, state.remainingSec - elapsedSec)
-          : state.remainingSec;
+    // the leftover. currentRemainingSec() is the one implementation of that
+    // arithmetic; this used to carry a second copy, plus a `reminded -> 0` branch
+    // on top of it. The branch was never needed: fireReminder() leaves startedAt
+    // null and remainingSec 0, so the shared function already answers 0 there.
+    const remainingSec = currentRemainingSec();
     const track = await currentTrack(state.reminderSeq);
     // The same selector, one step further on. The 下一首 row is always on screen,
     // so the Client needs an answer before the first 试听 rather than a row that
@@ -489,17 +500,7 @@ export async function start(context) {
   async function setSound(value, mode) {
     if (value === null || value === '') {
       if (state.soundPath === null) return { ok: true };
-      state.soundPath = null;
-      state.soundInput = null;
-      state.soundRelative = false;
-      state.soundMode = 'single';
-      state.soundIndex = 0;
-      // The lock goes with the folder. It is a file NAME, so it survived the
-      // removal and came back silently the next time a folder holding a file of
-      // that name was configured — the app looked locked with nothing to show
-      // for it, and no box had been ticked.
-      state.soundPinned = null;
-      state.soundVersion += 1;
+      clearSound();
       await persist();
       broadcast();
       return { ok: true };
