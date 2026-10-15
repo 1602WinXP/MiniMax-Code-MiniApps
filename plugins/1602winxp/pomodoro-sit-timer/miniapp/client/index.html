@@ -954,7 +954,7 @@
                 <input
                   type="text"
                   id="soundPathInput"
-                  placeholder="sounds/"
+                  placeholder="miniapp/node/sounds/"
                   lang="en"
                   spellcheck="false"
                   autocomplete="off"
@@ -1152,7 +1152,7 @@
             'preset.p60': '60 分钟',
             'card.sound': '提醒音',
             'card.sound.hint':
-              '填音频文件或文件夹路径即可替换默认提示音。相对路径以插件目录为基准（如 sounds/），绝对路径用本机任意位置。按 <kbd>Enter</kbd> 生效；清空后按 <kbd>Enter</kbd> 就退回页面现场合成的提示音，背后没有音频文件。',
+              '填音频文件或文件夹路径即可替换默认提示音。相对路径以插件目录为基准（如 miniapp/node/sounds/），绝对路径用本机任意位置。按 <kbd>Enter</kbd> 生效；清空后按 <kbd>Enter</kbd> 就退回页面现场合成的提示音，背后没有音频文件。',
             'sound.current': '当前：',
             'sound.default': '默认提示音',
             'field.soundpath': '音频文件或文件夹路径',
@@ -1167,7 +1167,7 @@
             'sound.pinned': '单曲循环锁定：',
             'sound.mode.locked': '单曲循环已锁定这一首，顺序/随机和试听都只播它。',
             'err.sound.sound_path_escapes_plugin':
-              '相对路径不能跳出插件目录，请用 sounds/ 这样的写法。',
+              '相对路径不能跳出插件目录，请用 miniapp/node/sounds/ 这样的写法。',
             'err.sound.sound_dir_empty': '这个文件夹里没有可用的音频文件。',
             'err.sound.sound_dir_unreadable': '读不了这个文件夹。',
             'err.sound.sound_dir_too_many': '音频文件太多了（上限 {n} 个）。',
@@ -1208,8 +1208,8 @@
             'err.sound.sound_path_not_a_string': '路径必须是文本。',
             'err.sound.sound_path_empty': '路径不能为空。',
             'err.sound.sound_path_too_long': '路径太长了。',
-            'err.sound.sound_path_not_absolute': '要填绝对路径，比如 D:\\sounds\\ding.mp3。',
-            'err.sound.sound_type_unsupported': '只支持 mp3 / wav / ogg / m4a / aac / flac / webm。',
+            'err.sound.sound_type_unsupported':
+              '只支持 mp3 / wav / ogg / oga / opus / m4a / aac / flac / webm。',
             'err.sound.sound_file_not_found': '找不到这个文件，检查一下路径。',
             'err.sound.sound_not_a_file': '这个路径不是文件。',
             'err.sound.sound_file_too_large': '文件超过 25MB，换个短一点的。',
@@ -1246,7 +1246,7 @@
             'preset.p60': '60 min',
             'card.sound': 'Alert sound',
             'card.sound.hint':
-              'A file or a folder replaces the default chime. Relative paths resolve against the plugin folder (e.g. sounds/); absolute paths can point anywhere on this machine. Press <kbd>Enter</kbd> to apply. Clearing the box and pressing <kbd>Enter</kbd> goes back to a chime the page synthesises on the spot, with no audio file behind it.',
+              'A file or a folder replaces the default chime. Relative paths resolve against the plugin folder (e.g. miniapp/node/sounds/); absolute paths can point anywhere on this machine. Press <kbd>Enter</kbd> to apply. Clearing the box and pressing <kbd>Enter</kbd> goes back to a chime the page synthesises on the spot, with no audio file behind it.',
             'sound.current': 'Current: ',
             'sound.default': 'Default chime',
             'field.soundpath': 'Audio file or folder path',
@@ -1261,7 +1261,7 @@
             'sound.pinned': 'Pinned:',
             'sound.mode.locked': 'Pinned to one track, so in order / shuffle and Preview all play it.',
             'err.sound.sound_path_escapes_plugin':
-              'A relative path cannot leave the plugin folder — use something like sounds/.',
+              'A relative path cannot leave the plugin folder — use something like miniapp/node/sounds/.',
             'err.sound.sound_dir_empty': 'No usable audio files in that folder.',
             'err.sound.sound_dir_unreadable': 'That folder could not be read.',
             'err.sound.sound_dir_too_many': 'Too many audio files (limit {n}).',
@@ -1301,10 +1301,8 @@
             'err.sound.sound_path_not_a_string': 'The path must be text.',
             'err.sound.sound_path_empty': 'The path cannot be empty.',
             'err.sound.sound_path_too_long': 'That path is too long.',
-            'err.sound.sound_path_not_absolute':
-              'Use an absolute path, for example D:\\sounds\\ding.mp3.',
             'err.sound.sound_type_unsupported':
-              'Supported formats: mp3 / wav / ogg / m4a / aac / flac / webm.',
+              'Supported formats: mp3 / wav / ogg / oga / opus / m4a / aac / flac / webm.',
             'err.sound.sound_file_not_found': 'File not found — check the path.',
             'err.sound.sound_not_a_file': 'That path is not a file.',
             'err.sound.sound_file_too_large': 'The file is over 25MB. Pick a shorter one.',
@@ -1341,7 +1339,7 @@
             'preset.p60': '60分',
             'card.sound': '通知音',
             'card.sound.hint':
-              '音声ファイルまたはフォルダのパスを入れると既定の音を置き換えられます。相対パスはプラグインのフォルダを基準に解決され（例: sounds/）、絶対パスならこのパソコン上の任意の場所を指定できます。<kbd>Enter</kbd> キーで反映されます。空欄にして <kbd>Enter</kbd> で、ページ内でその場で合成した音（音声ファイルは使いません）に戻ります。',
+              '音声ファイルまたはフォルダのパスを入れると既定の音を置き換えられます。相対パスはプラグインのフォルダを基準に解決され（例: miniapp/node/sounds/）、絶対パスならこのパソコン上の任意の場所を指定できます。<kbd>Enter</kbd> キーで反映されます。空欄にして <kbd>Enter</kbd> で、ページ内でその場で合成した音（音声ファイルは使いません）に戻ります。',
             'sound.current': '現在：',
             'sound.default': '既定の通知音',
             'field.soundpath': '音声ファイルまたはフォルダのパス',
@@ -1356,7 +1354,7 @@
             'sound.pinned': '固定中：',
             'sound.mode.locked': '1 曲に固定中なので、順番/ランダム・試聴ともその曲になります。',
             'err.sound.sound_path_escapes_plugin':
-              '相対パスではプラグインフォルダの外へは指定できません。sounds/ のように入力してください。',
+              '相対パスではプラグインフォルダの外へは指定できません。miniapp/node/sounds/ のように入力してください。',
             'err.sound.sound_dir_empty': 'このフォルダに利用できる音声ファイルがありません。',
             'err.sound.sound_dir_unreadable': 'このフォルダを読み取れませんでした。',
             'err.sound.sound_dir_too_many': '音声ファイルが多すぎます（上限 {n} 個）。',
@@ -1396,10 +1394,8 @@
             'err.sound.sound_path_not_a_string': 'パスは文字列で指定してください。',
             'err.sound.sound_path_empty': 'パスを空にはできません。',
             'err.sound.sound_path_too_long': 'パスが長すぎます。',
-            'err.sound.sound_path_not_absolute':
-              '絶対パスを指定してください（例: D:\\sounds\\ding.mp3）。',
             'err.sound.sound_type_unsupported':
-              '対応形式: mp3 / wav / ogg / m4a / aac / flac / webm。',
+              '対応形式: mp3 / wav / ogg / oga / opus / m4a / aac / flac / webm。',
             'err.sound.sound_file_not_found': 'ファイルが見つかりません。パスを確認してください。',
             'err.sound.sound_not_a_file': 'そのパスはファイルではありません。',
             'err.sound.sound_file_too_large': '25MB を超えています。短いものを選んでください。',
@@ -1436,7 +1432,7 @@
             'preset.p60': '60분',
             'card.sound': '알림음',
             'card.sound.hint':
-              '음성 파일 또는 폴더 경로를 넣으면 기본 알림음을 대체합니다. 상대 경로는 플러그인 폴더를 기준으로 계산되며(예: sounds/), 절대 경로는 이 컴퓨터의 어느 위치든 지정할 수 있습니다. <kbd>Enter</kbd> 키로 적용됩니다. 비운 뒤 <kbd>Enter</kbd>를 누르면 페이지에서 즉석으로 합성한 알림음(음성 파일 없음)으로 돌아갑니다.',
+              '음성 파일 또는 폴더 경로를 넣으면 기본 알림음을 대체합니다. 상대 경로는 플러그인 폴더를 기준으로 계산되며(예: miniapp/node/sounds/), 절대 경로는 이 컴퓨터의 어느 위치든 지정할 수 있습니다. <kbd>Enter</kbd> 키로 적용됩니다. 비운 뒤 <kbd>Enter</kbd>를 누르면 페이지에서 즉석으로 합성한 알림음(음성 파일 없음)으로 돌아갑니다.',
             'sound.current': '현재: ',
             'sound.default': '기본 알림음',
             'field.soundpath': '음성 파일 또는 폴더 경로',
@@ -1451,7 +1447,7 @@
             'sound.pinned': '고정됨:',
             'sound.mode.locked': '한 곡에 고정되어 순서/랜덤과 미리듣기 모두 그 곡만 재생합니다.',
             'err.sound.sound_path_escapes_plugin':
-              '상대 경로로는 플러그인 폴더 밖을 벗어날 수 없습니다. sounds/처럼 입력하세요.',
+              '상대 경로로는 플러그인 폴더 밖을 벗어날 수 없습니다. miniapp/node/sounds/처럼 입력하세요.',
             'err.sound.sound_dir_empty': '이 폴더에 사용할 수 있는 음성 파일이 없습니다.',
             'err.sound.sound_dir_unreadable': '이 폴더를 읽지 못했습니다.',
             'err.sound.sound_dir_too_many': '음성 파일이 너무 많습니다(최대 {n}개).',
@@ -1491,10 +1487,8 @@
             'err.sound.sound_path_not_a_string': '경로는 텍스트여야 합니다.',
             'err.sound.sound_path_empty': '경로는 비워 둘 수 없습니다.',
             'err.sound.sound_path_too_long': '경로가 너무 깁니다.',
-            'err.sound.sound_path_not_absolute':
-              '절대 경로를 입력하세요(예: D:\\sounds\\ding.mp3).',
             'err.sound.sound_type_unsupported':
-              '지원 형식: mp3 / wav / ogg / m4a / aac / flac / webm.',
+              '지원 형식: mp3 / wav / ogg / oga / opus / m4a / aac / flac / webm.',
             'err.sound.sound_file_not_found': '파일을 찾을 수 없습니다. 경로를 확인하세요.',
             'err.sound.sound_not_a_file': '해당 경로는 파일이 아닙니다.',
             'err.sound.sound_file_too_large': '25MB를 초과했습니다. 더 짧은 것을 선택하세요.',
@@ -2275,7 +2269,8 @@
           // walk to, so it has to be re-evaluated whenever render() runs.
           renderSoundNext();
           if (document.activeElement !== el.soundPathInput && !pathDirty) {
-            // Show what was configured. A relative path round-trips as `sounds`,
+            // Show what was configured. A relative path round-trips as
+            // `miniapp/node/sounds`,
             // not as the runtime's temp directory, which changes every restart.
             // Skipped while a draft is pending, so blur cannot throw the edit away.
             el.soundPathInput.value = snapshot.soundInput || snapshot.soundPath || '';

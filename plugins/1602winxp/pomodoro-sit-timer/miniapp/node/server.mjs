@@ -28,10 +28,10 @@ const POST_ROUTES = new Set([
  * audio extension only, existing regular file, size capped.
  *
  * Paths may be absolute (anywhere the user can reach) or relative. A relative
- * path resolves against the plugin root so a shipped `sounds/` folder works for
- * whoever installs the plugin, and is then pinned to stay inside that root — a
- * relative path is a way to name bundled content, never a way to escape upward
- * into the rest of the filesystem.
+ * path resolves against the plugin root so a shipped `miniapp/node/sounds/`
+ * folder works for whoever installs the plugin, and is then pinned to stay inside
+ * that root — a relative path is a way to name bundled content, never a way to
+ * escape upward into the rest of the filesystem.
  */
 const MAX_SOUND_BYTES = 25 * 1024 * 1024;
 const MAX_PATH_CHARS = 1024;
@@ -555,6 +555,19 @@ export async function start(context) {
       return { ok: true };
     }
 
+    // The same three gates the folder scan applies, run on the file itself.
+    // Without them the failure surfaced much later and much quieter: a notes.txt
+    // came back 200 with no UI error at all, then /api/sound answered
+    // 500 sound_type_unsupported at reminder time and the page fell back to the
+    // synthesised chime without ever saying why. `err.sound.sound_file_too_large`
+    // has been sitting in the Client for a code this path never produced.
+    const ext = extname(target).toLowerCase();
+    if (!SOUND_TYPES.has(ext)) return { ok: false, reason: 'sound_type_unsupported' };
+    // Not a directory is not the same as a file. A fifo or a device node passes
+    // isDirectory() and then holds the read stream open forever.
+    if (!info.isFile()) return { ok: false, reason: 'sound_not_a_file' };
+    if (info.size > MAX_SOUND_BYTES) return { ok: false, reason: 'sound_file_too_large' };
+
     // A file can only ever play alone, so any folder mode collapses to 'single'.
     if (state.soundPath !== target || state.soundMode !== 'single') {
       state.soundPath = target;
@@ -816,17 +829,21 @@ export async function start(context) {
       });
       response.write(`event: state\ndata: ${JSON.stringify(await snapshot())}\n\n`);
       streams.add(response);
-      request.on('close', () => {
+      // Both exits have to detach the abort listener, not just the stream. A
+      // listener holds a closed ServerResponse alive, and EventTarget keeps
+      // every one of them until the signal itself aborts — twelve connect and
+      // disconnect cycles left twelve dead listeners behind, all of them
+      // reachable from the one object that outlives them all.
+      function dropStream() {
         streams.delete(response);
-      });
-      context.signal.addEventListener(
-        'abort',
-        () => {
-          streams.delete(response);
-          response.end();
-        },
-        { once: true },
-      );
+        context.signal.removeEventListener('abort', onAbort);
+      }
+      function onAbort() {
+        dropStream();
+        response.end();
+      }
+      context.signal.addEventListener('abort', onAbort, { once: true });
+      request.on('close', dropStream);
       return;
     }
 
@@ -862,6 +879,14 @@ export async function start(context) {
         return sendJson(response, 410, { error: 'sound_file_gone' });
       }
       if (!info.isFile()) return sendJson(response, 410, { error: 'sound_not_a_file' });
+      // MAX_SOUND_BYTES is a ceiling on the bytes this route will push, not only
+      // an ingest-time one. setSound() already refuses an oversized file, but a
+      // single file can grow afterwards and a folder entry that was small at scan
+      // time can be replaced with anything at all — a 30 MB .wav accepted while
+      // it was small used to be served whole, with its real content-length.
+      if (info.size > MAX_SOUND_BYTES) {
+        return sendJson(response, 413, { error: 'sound_file_too_large' });
+      }
       response.writeHead(200, {
         'content-type': contentType,
         'content-length': String(info.size),

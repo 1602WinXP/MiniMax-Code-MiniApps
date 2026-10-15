@@ -8,9 +8,7 @@
   "icon": "icon.png",
   "category": "Productivity",
   "exampleQueries": [
-    "打开我的久坐提醒番茄钟",
-    "把工作段改成 45 分钟",
-    "今天我已经完成了几段专注"
+    "打开我的久坐提醒番茄钟"
   ],
   "apps": [],
   "mcpServers": [],
